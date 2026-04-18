@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(STUDENT)
+  avatar    String?  // Cloudinary URL
+  createdAt DateTime @default(now())
+
+  tickets   Ticket[]      @relation("UserTickets")
+  tasks     Task[]        @relation("UserTasks")
+  approvals Approval[]    @relation("UserApprovals")
+}
+
+enum Role {
+  STUDENT
+  PROFESSOR
+  HOD
+  PRINCIPAL
+  ADMIN
+}
+
+model Ticket {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  imageUrl    String?  // Cloudinary high-res proof
+  status      String   @default("OPEN")
+  latitude    Float?
+  longitude   Float?
+  authorId    String
+  author      User     @relation("UserTickets", fields: [authorId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  deadline    DateTime
+  status      String   @default("PENDING")
+  assigneeId  String
+  assignee    User     @relation("UserTasks", fields: [assigneeId], references: [id])
+}
+
+model Approval {
+  id            String   @id @default(uuid())
+  type          String   // e.g., LEAVE, CERTIFICATE
+  content       String
+  status        String   @default("PENDING_PROFESSOR") // PENDING_PROFESSOR -> PENDING_HOD -> COMPLETED
+  requesterId   String
+  requester     User     @relation("UserApprovals", fields: [requesterId], references: [id])
+  pdfUrl        String?  // Cloudinary PDF link after PDFKit generation
+  createdAt     DateTime @default(now())
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  title       String
+  startTime   DateTime
+  endTime     DateTime
+  location    String
+  professorId String
+  // "Clash Detection" checks overlaps using startTime, endTime, and location.
+}
