@@ -1,191 +1,197 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import axios from 'axios';
-import { API_BASE_URL } from '../../constants/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme, GRADIENT, SHADOWS, RADIUS, FONT } from '../../constants/designTokens';
+import {
+  GlassCard, GradientIconCircle, SectionHeader, FilterChip,
+  BottomSheet, GradientButton, RolePill,
+} from '../../components/ui/AetherUI';
 import { useAuthStore } from '../../store/authStore';
+import { useCampusStore, type ApprovalKind, type FacultyTier, type Approval } from '../../store/campusStore';
+
+const tabs = ['All', 'Pending', 'Approved', 'Rejected'] as const;
+const KINDS: ApprovalKind[] = ['Leave', 'Room Booking', 'Bonafide', 'Event', 'Fee Waiver', 'Reschedule'];
+
+function statusColor(s: Approval['status'], theme: any) {
+  switch (s) {
+    case 'Approved': return { color: theme.primary, bg: theme.accent };
+    case 'Pending': return { color: GRADIENT.start, bg: 'rgba(91,127,255,0.1)' };
+    case 'In Review': return { color: GRADIENT.end, bg: 'rgba(236,72,153,0.1)' };
+    case 'Rejected': return { color: theme.destructive, bg: 'rgba(239,68,68,0.1)' };
+  }
+}
 
 export default function ApprovalsScreen() {
+  const theme = useTheme();
   const { user } = useAuthStore();
-  const isFaculty = user?.role === 'PROFESSOR' || user?.role === 'HOD' || user?.role === 'PRINCIPAL';
-  const [downloading, setDownloading] = useState(false);
-  
-  const [approvals, setApprovals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { approvals, createApproval, actOnApproval } = useCampusStore();
+  const role = user?.role ?? 'STUDENT';
 
-  useEffect(() => {
-    const fetchApprovals = async () => {
-      try {
-        const res = await axios.get(`${API_BASE_URL}/api/approvals`, {
-          headers: { Authorization: `Bearer ${user?.token || 'DEV_TOKEN'}` }
-        });
-        setApprovals(res.data);
-      } catch (err) {
-        console.error('Approvals fetch failed:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchApprovals();
-  }, [user]);
+  const [tab, setTab] = useState<typeof tabs[number]>('All');
+  const [creating, setCreating] = useState(false);
+  const [kind, setKind] = useState<ApprovalKind>('Leave');
+  const [title, setTitle] = useState('');
+  const [details, setDetails] = useState('');
+  const [actorTier, setActorTier] = useState<FacultyTier>('Teacher');
 
-  // Backend uses /advance and /reject, not a generic /status
-  const advanceApproval = async (id: string) => {
-    try {
-      const res = await axios.patch(`${API_BASE_URL}/api/approvals/${id}/advance`, {}, {
-        headers: { Authorization: `Bearer ${user?.token || 'DEV_TOKEN'}` }
-      });
-      setApprovals(prev => prev.map(a => a.id === id ? res.data : a));
-      Alert.alert('Success', 'Approval advanced to next stage.');
-    } catch (err) {
-      Alert.alert('Error', 'Could not advance this approval.');
-    }
+  const filtered = tab === 'All' ? approvals :
+    approvals.filter((a) => tab === 'Pending' ? (a.status === 'Pending' || a.status === 'In Review') : a.status === tab);
+
+  const stats = {
+    pending: approvals.filter((a) => a.status === 'Pending' || a.status === 'In Review').length,
+    approved: approvals.filter((a) => a.status === 'Approved').length,
+    total: approvals.length,
   };
 
-  const rejectApproval = async (id: string) => {
-    try {
-      const res = await axios.patch(`${API_BASE_URL}/api/approvals/${id}/reject`, {}, {
-        headers: { Authorization: `Bearer ${user?.token || 'DEV_TOKEN'}` }
-      });
-      setApprovals(prev => prev.map(a => a.id === id ? res.data : a));
-      Alert.alert('Rejected', 'Approval has been rejected.');
-    } catch (err) {
-      Alert.alert('Error', 'Could not reject this approval.');
-    }
-  };
-
-  const createApproval = async () => {
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/approvals`, {
-        type: 'LEAVE',
-        content: 'Requesting 3 days leave for hackathon in Bangalore.',
-      }, {
-        headers: { Authorization: `Bearer ${user?.token || 'DEV_TOKEN'}` }
-      });
-      setApprovals(prev => [res.data, ...prev]);
-      Alert.alert('Created', 'Your leave request has been submitted to the Chain.');
-    } catch (err) {
-      Alert.alert('Error', 'Could not create approval request.');
-    }
-  };
-
-  const downloadPdf = async (url: string) => {
-    try {
-      setDownloading(true);
-      const filename = `Aether_Certificate_${Date.now()}.pdf`;
-      const result = await FileSystem.downloadAsync(url, FileSystem.documentDirectory + filename);
-      
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(result.uri);
-      } else {
-        Alert.alert('Downloaded', `Saved to ${result.uri}`);
-      }
-    } catch (err) {
-      Alert.alert('Download Failed', 'Could not fetch the document.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    if (status === 'COMPLETED') return '#34D399';
-    if (status === 'REJECTED') return '#F87171';
-    return '#818CF8';
+  const handleCreate = () => {
+    const finalTitle = title.trim() || kind;
+    createApproval({ title: finalTitle, kind, by: user?.email ?? 'student', details: details.trim() ? { reason: details.trim() } : undefined });
+    setTitle(''); setDetails('');
+    setCreating(false);
   };
 
   return (
-    <View className="flex-1 bg-aether-bg">
-      <View className="pt-16 pb-4 px-6 border-b border-aether-border bg-aether-surface">
-        <Text className="text-aether-text text-3xl font-bold">Chain of Responsibility</Text>
-        <Text className="text-aether-muted text-sm tracking-wide mt-1">Multi-stage document clearance</Text>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      {/* Header */}
+      <View style={[s.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: theme.foreground }}>Approvals</Text>
+          <Text style={{ fontSize: 11, color: theme.muted }}>{role === 'FACULTY' ? 'Chain of Responsibility queue' : 'Track your requests'}</Text>
+        </View>
+        {role === 'STUDENT' && (
+          <TouchableOpacity onPress={() => setCreating(true)}>
+            <LinearGradient colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]} style={s.addBtn}>
+              <MaterialCommunityIcons name="plus" size={16} color="#FFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <ScrollView className="flex-1 p-6">
-        <View className="flex-row justify-between items-center mb-6">
-          <Text className="text-aether-text text-xl font-bold">
-            {isFaculty ? 'Action Required' : 'Your Requests'}
-          </Text>
-          {!isFaculty && (
-            <TouchableOpacity onPress={createApproval} className="bg-aether-primary px-4 py-2 rounded-xl flex-row items-center">
-              <MaterialCommunityIcons name="plus" size={18} color="#0F172A" />
-              <Text className="text-[#0F172A] ml-1 font-bold text-sm">New Request</Text>
-            </TouchableOpacity>
-          )}
+      <ScrollView contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+        {/* Stats */}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {[
+            { icon: 'clock-outline', k: 'PENDING', v: stats.pending },
+            { icon: 'check-circle-outline', k: 'APPROVED', v: stats.approved },
+            { icon: 'file-document-outline', k: 'TOTAL', v: stats.total },
+          ].map(({ icon, k, v }) => (
+            <View key={k} style={[s.statCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <MaterialCommunityIcons name={icon as any} size={16} color={theme.primary} />
+              <Text style={{ fontSize: 20, fontWeight: '800', color: theme.foreground, marginTop: 4 }}>{v}</Text>
+              <Text style={[FONT.tiny, { color: theme.muted }]}>{k}</Text>
+            </View>
+          ))}
         </View>
 
-        {loading ? (
-          <ActivityIndicator color="#38BDF8" size="large" className="mt-10" />
-        ) : approvals.length === 0 ? (
-          <View className="bg-aether-surface p-6 rounded-2xl border border-aether-border mb-6 items-center">
-            <MaterialCommunityIcons name="check-all" size={48} color="#34D399" />
-            <Text className="text-aether-text font-bold text-lg mt-4">All Clear!</Text>
-            <Text className="text-aether-muted text-center mt-2">
-              {isFaculty ? 'No pending approvals need your action.' : 'Tap"+ New Request" to submit a leave or certificate request.'}
-            </Text>
-          </View>
-        ) : (
-          approvals.map((item) => (
-            <View key={item.id} className="bg-aether-surface p-5 rounded-2xl border border-aether-border mb-4">
-              <View className="flex-row justify-between items-start mb-4">
-                <View className="flex-row gap-3 items-center">
-                  <View className="p-2 rounded-lg">
-                    <MaterialCommunityIcons name="file-document" size={24} color="#38BDF8" />
+        {/* Faculty tier selector */}
+        {role === 'FACULTY' && (
+          <GlassCard theme={theme} style={{ marginTop: 16 }}>
+            <Text style={[FONT.tiny, { color: theme.muted, marginBottom: 8 }]}>ACTING AS</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(['Teacher', 'HOD', 'Principal'] as FacultyTier[]).map((t) => (
+                <RolePill key={t} label={t} icon="shield-check" active={actorTier === t} onPress={() => setActorTier(t)} theme={theme} />
+              ))}
+            </View>
+          </GlassCard>
+        )}
+
+        {/* Filter tabs */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 16 }}>
+          {tabs.map((t) => (
+            <FilterChip key={t} label={t} active={tab === t} onPress={() => setTab(t)} theme={theme} />
+          ))}
+        </ScrollView>
+
+        {/* Approval cards */}
+        <View style={{ gap: 12, marginTop: 16, marginBottom: 30 }}>
+          {filtered.length === 0 && (
+            <Text style={{ textAlign: 'center', fontSize: 12, color: theme.muted, paddingVertical: 32 }}>No requests in this view.</Text>
+          )}
+          {filtered.map((it) => {
+            const stage = it.chain.find((c) => c.status === 'current');
+            const canAct = role === 'FACULTY' && stage && stage.by === actorTier;
+            const sc = statusColor(it.status, theme);
+            return (
+              <View key={it.id} style={[s.approvalCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={[s.approvalIcon, { backgroundColor: theme.accent }]}>
+                    <MaterialCommunityIcons name="file-document-outline" size={16} color={theme.primary} />
                   </View>
-                  <View>
-                    <Text className="text-aether-text font-bold text-lg">{item.type}</Text>
-                    <Text className="text-aether-muted text-sm">{item.requester?.name || user?.name}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.foreground }} numberOfLines={1}>{it.title}</Text>
+                    <Text style={{ fontSize: 11, color: theme.muted }} numberOfLines={1}>
+                      {it.kind} · {new Date(it.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      {stage ? ` · awaits ${stage.by}` : ''}
+                    </Text>
                   </View>
+                  <Text style={[s.statusBadge, { color: sc.color, backgroundColor: sc.bg }]}>● {it.status}</Text>
                 </View>
-                <View style={{ backgroundColor: `${getStatusColor(item.status)}20` }} className="px-3 py-1 rounded-full">
-                  <Text style={{ color: getStatusColor(item.status) }} className="font-bold text-xs uppercase tracking-wide">{item.status.replace(/_/g, ' ')}</Text>
+                {/* Actions */}
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                  {canAct && (
+                    <>
+                      <TouchableOpacity onPress={() => actOnApproval(it.id, 'approve', actorTier)} activeOpacity={0.9} style={{ flex: 1 }}>
+                        <LinearGradient colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]} style={s.actionBtn}>
+                          <MaterialCommunityIcons name="check-circle" size={14} color="#FFF" />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>Approve</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => actOnApproval(it.id, 'reject', actorTier)}
+                        style={[s.actionBtn, { flex: 1, backgroundColor: 'rgba(239,68,68,0.1)' }]}>
+                        <MaterialCommunityIcons name="close-circle" size={14} color={theme.destructive} />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: theme.destructive }}>Reject</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  {!canAct && (
+                    <TouchableOpacity style={[s.actionBtn, { flex: 1, backgroundColor: theme.secondary }]}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: theme.muted }}>View timeline</Text>
+                      <MaterialCommunityIcons name="chevron-right" size={14} color={theme.muted} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-
-              <Text className="text-aether-muted mb-6 leading-relaxed">
-                {item.content || 'No additional details provided.'}
-              </Text>
-
-              {isFaculty && !['COMPLETED', 'REJECTED'].includes(item.status) ? (
-                <View className="flex-row gap-3">
-                  <TouchableOpacity onPress={() => advanceApproval(item.id)} className="flex-1 bg-aether-accent p-4 rounded-xl flex-row justify-center items-center">
-                    <MaterialCommunityIcons name="check-circle-outline" size={20} color="#0F172A" />
-                    <Text className="text-[#0F172A] ml-2 font-bold text-base">Advance</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => rejectApproval(item.id)} className="flex-1 bg-transparent border border-aether-danger p-4 rounded-xl flex-row justify-center items-center">
-                    <MaterialCommunityIcons name="close-circle-outline" size={20} color="#F87171" />
-                    <Text className="text-aether-danger ml-2 font-bold text-base">Reject</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : item.status === 'COMPLETED' && item.pdfUrl ? (
-                <TouchableOpacity 
-                  className="border border-aether-primary p-4 rounded-xl flex-row justify-center items-center"
-                  onPress={() => downloadPdf(item.pdfUrl)}
-                  disabled={downloading}
-                >
-                  <MaterialCommunityIcons name="cloud-download-outline" size={20} color="#38BDF8" />
-                  <Text className="text-aether-primary ml-2 font-bold text-base">
-                    {downloading ? 'Extracting...' : 'Download Certificate'}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View className="bg-aether-bg p-4 rounded-xl border border-aether-border flex-row items-center">
-                  <MaterialCommunityIcons 
-                    name={item.status === 'COMPLETED' ? 'check-circle' : item.status === 'REJECTED' ? 'close-circle' : 'timeline-clock-outline'} 
-                    size={24} 
-                    color={getStatusColor(item.status)} 
-                  />
-                  <Text className="text-aether-text ml-3 font-medium flex-1">
-                    {item.status === 'REJECTED' ? 'This request was rejected.' : 'Waiting on clearance...'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ))
-        )}
+            );
+          })}
+        </View>
       </ScrollView>
+
+      {/* Create modal */}
+      <BottomSheet visible={creating} onClose={() => setCreating(false)} theme={theme}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+          <View>
+            <Text style={[FONT.tiny, { color: theme.muted }]}>NEW REQUEST</Text>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: theme.foreground }}>Smart Workflow</Text>
+          </View>
+          <TouchableOpacity onPress={() => setCreating(false)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.secondary, alignItems: 'center', justifyContent: 'center' }}>
+            <MaterialCommunityIcons name="close" size={16} color={theme.foreground} />
+          </TouchableOpacity>
+        </View>
+        <Text style={[FONT.tiny, { color: theme.muted, marginBottom: 8 }]}>TYPE</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          {KINDS.map((k) => (
+            <RolePill key={k} label={k} icon="file-document" active={kind === k} onPress={() => setKind(k)} theme={theme} />
+          ))}
+        </View>
+        <Text style={[FONT.tiny, { color: theme.muted, marginBottom: 8 }]}>TITLE</Text>
+        <TextInput value={title} onChangeText={setTitle} placeholder={kind} placeholderTextColor={theme.muted}
+          style={{ backgroundColor: theme.inputBg, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.foreground, marginBottom: 16 }} />
+        <Text style={[FONT.tiny, { color: theme.muted, marginBottom: 8 }]}>REASON / DETAILS</Text>
+        <TextInput value={details} onChangeText={setDetails} placeholder="Brief context (optional)" placeholderTextColor={theme.muted} multiline numberOfLines={3}
+          style={{ backgroundColor: theme.inputBg, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.foreground, marginBottom: 16, textAlignVertical: 'top', minHeight: 80 }} />
+        <GradientButton label="SUBMIT TO CHAIN" onPress={handleCreate} icon="send" />
+      </BottomSheet>
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1 },
+  addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', ...SHADOWS.glow },
+  statCard: { flex: 1, borderRadius: RADIUS.xl, padding: 12, borderWidth: 1, ...SHADOWS.soft },
+  approvalCard: { borderRadius: RADIUS.xl, padding: 12, borderWidth: 1, ...SHADOWS.soft },
+  approvalIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  statusBadge: { fontSize: 10, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: RADIUS.full, paddingVertical: 8, ...SHADOWS.glow },
+});

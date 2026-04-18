@@ -1,220 +1,188 @@
-import { View, Text, StyleSheet, Pressable, Animated, ActivityIndicator, Alert } from 'react-native';
-import { useEffect, useRef, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import axios from 'axios';
-import { useAuthStore } from '../store/authStore';
-import { API_BASE_URL } from '../constants/api';
+import { useAuthStore, type UserRole } from '../store/authStore';
+import { GRADIENT, SHADOWS, RADIUS, FONT, useTheme } from '../constants/designTokens';
+import { GradientButton, GradientIconCircle, RolePill, StatBadge } from '../components/ui/AetherUI';
 
-WebBrowser.maybeCompleteAuthSession();
+const { width } = Dimensions.get('window');
+
+type DemoRole = 'Student' | 'Faculty' | 'Admin';
+const DEMO_ROLES: { key: DemoRole; icon: string }[] = [
+  { key: 'Student', icon: 'school' },
+  { key: 'Faculty', icon: 'book-open-page-variant' },
+  { key: 'Admin', icon: 'shield-check' },
+];
 
 export default function LandingScreen() {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const router = useRouter();
-    const { setUser, setLoading, isLoading, user } = useAuthStore();
-    const [request, response, promptAsync] = Google.useAuthRequest({
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || 'dummy.apps.googleusercontent.com',
-        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || 'dummy-android.apps.googleusercontent.com',
-        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || 'dummy-ios.apps.googleusercontent.com',
+  const theme = useTheme();
+  const router = useRouter();
+  const { user, setUser } = useAuthStore();
+  const [role, setRole] = useState<DemoRole>('Student');
+  const [userId, setUserId] = useState('priyank.s');
+  const [password, setPassword] = useState('aether');
+  const [showPw, setShowPw] = useState(false);
+
+  // Auto-redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      router.replace('/(tabs)');
+    }
+  }, [user]);
+
+  const handleLogin = () => {
+    if (!userId || !password) return;
+    const roleMap: Record<DemoRole, UserRole> = {
+      Student: 'STUDENT',
+      Faculty: 'FACULTY',
+      Admin: 'ADMIN',
+    };
+    const authorityMap: Record<DemoRole, number | undefined> = {
+      Student: undefined,
+      Faculty: 1,
+      Admin: undefined,
+    };
+    setUser({
+      id: `demo-${role.toLowerCase()}`,
+      name: role === 'Student' ? 'Demo Student' : role === 'Faculty' ? 'Prof. Demo' : 'Admin User',
+      email: `${userId}@aether.edu`,
+      role: roleMap[role],
+      authorityLevel: authorityMap[role],
+      token: 'demo-token',
     });
+  };
 
-    // If already logged in (e.g. app restart with persisted session), skip login screen
-    useEffect(() => {
-        console.log('[AUTH] index.tsx useEffect fired. user:', user ? user.role : 'NULL');
-        if (user) {
-            console.log('[AUTH] User found on landing — redirecting to /(tabs)');
-            router.replace('/(tabs)');
-        } else {
-            console.log('[AUTH] No user on landing — showing login screen. Good.');
-        }
-    }, [user]);
-
-    useEffect(() => {
-        Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 1500,
-            useNativeDriver: true,
-        }).start();
-    }, []);
-
-    useEffect(() => {
-        if (response?.type === 'success') {
-            const { id_token } = response.params;
-            handleBackendAuth(id_token);
-        } else if (response?.type === 'error') {
-            Alert.alert('Auth Error', response.error?.message);
-        }
-    }, [response]);
-
-    const handleBackendAuth = async (idToken: string) => {
-        try {
-            setLoading(true);
-            // Simulate Google OAuth token handoff via the Aether Express Backend
-            const res = await axios.post(`${API_BASE_URL}/api/auth/google`, { idToken });
-            setUser(res.data.user);
-            router.replace('/(tabs)');
-        } catch (error) {
-            console.error('Backend Auth Error:', error);
-            // Fallback for development if backend token verification fails due to un-whitelisted CLI proxy
-            // Mocking successful login locally for UI routing
-            setUser({ id: 'dummy', name: 'Aether Engineer', email: 'test@aether.com', role: 'ADMIN', token: 'MOCK_TOKEN' });
-            router.replace('/(tabs)');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loginDemo = (roleName: string, role: 'STUDENT' | 'FACULTY' | 'ADMIN', level?: number) => {
-        setUser({ 
-            id: `demo_${role.toLowerCase()}${level ? `_${level}` : ''}`, 
-            name: `Demo ${roleName}`, 
-            email: `${roleName.toLowerCase()}@university.edu`, 
-            role: role, 
-            authorityLevel: level,
-            token: 'DEV_TOKEN' 
-        });
-        router.replace('/(tabs)');
-    };
-
-    return (
-        <View style={styles.container}>
-            <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-                <View style={styles.branding}>
-                    <Text style={styles.logo}>AETHER</Text>
-                    <Text style={styles.subtitle}>Autonomous Campus OS</Text>
-                </View>
-
-                <View style={styles.actionContainer}>
-                    {isLoading ? (
-                        <ActivityIndicator size="large" color="#38BDF8" style={{ paddingVertical: 18 }} />
-                    ) : (
-                        <>
-                            <Text style={styles.sectionHeader}>Quick Demo Login</Text>
-                            <Pressable style={styles.demoButton} onPress={() => loginDemo('Student', 'STUDENT')}>
-                                <Text style={styles.demoButtonText}>🎓 Login as Student</Text>
-                            </Pressable>
-                            <Pressable style={styles.demoButton} onPress={() => loginDemo('Teacher', 'FACULTY', 1)}>
-                                <Text style={styles.demoButtonText}>👨‍🏫 Login as Teacher (L1)</Text>
-                            </Pressable>
-                            <Pressable style={styles.demoButton} onPress={() => loginDemo('HOD', 'FACULTY', 2)}>
-                                <Text style={styles.demoButtonText}>🏢 Login as HOD (L2)</Text>
-                            </Pressable>
-                            <Pressable style={styles.demoButton} onPress={() => loginDemo('Principal', 'FACULTY', 3)}>
-                                <Text style={styles.demoButtonText}>🏛️ Login as Principal (L3)</Text>
-                            </Pressable>
-                            <Pressable style={styles.demoButton} onPress={() => loginDemo('Admin', 'ADMIN')}>
-                                <Text style={styles.demoButtonText}>⚙️ Login as Admin</Text>
-                            </Pressable>
-                            
-                            <View style={styles.divider} />
-
-                            <Pressable 
-                                style={styles.primaryButton}
-                                disabled={!request}
-                                onPress={() => promptAsync()}
-                            >
-                                <Text style={styles.buttonText}>Login with Google</Text>
-                            </Pressable>
-                        </>
-                    )}
-                </View>
-            </Animated.View>
+  return (
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Logo & tagline */}
+        <View style={styles.logoArea}>
+          <LinearGradient
+            colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={styles.logoIcon}
+          >
+            <MaterialCommunityIcons name="shield-check" size={32} color="#FFF" />
+          </LinearGradient>
+          <Text style={[styles.brand, { color: theme.primary }]}>A E T H E R</Text>
+          <Text style={[styles.tagline, { color: theme.muted }]}>YOUR CAMPUS. ONE INTERFACE.</Text>
         </View>
-    );
+
+        {/* Sign-in card */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[FONT.tiny, { color: theme.muted, marginBottom: 12 }]}>SIGN IN AS</Text>
+
+          {/* Role pills */}
+          <View style={styles.roleRow}>
+            {DEMO_ROLES.map(({ key, icon }) => (
+              <RolePill
+                key={key}
+                label={key}
+                icon={icon}
+                active={role === key}
+                onPress={() => setRole(key)}
+                theme={theme}
+              />
+            ))}
+          </View>
+
+          {/* ID field */}
+          <View style={styles.fieldGroup}>
+            <Text style={[FONT.tiny, { color: theme.muted }]}>ID</Text>
+            <TextInput
+              value={userId}
+              onChangeText={setUserId}
+              style={[styles.input, { color: theme.foreground, borderBottomColor: theme.border }]}
+              placeholderTextColor={theme.muted}
+              autoCapitalize="none"
+            />
+          </View>
+
+          {/* Password field */}
+          <View style={styles.fieldGroup}>
+            <Text style={[FONT.tiny, { color: theme.muted }]}>PASSWORD</Text>
+            <View style={[styles.pwRow, { borderBottomColor: theme.border }]}>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPw}
+                style={[styles.pwInput, { color: theme.foreground }]}
+                placeholderTextColor={theme.muted}
+              />
+              <TouchableOpacity onPress={() => setShowPw(!showPw)}>
+                <MaterialCommunityIcons name={showPw ? 'eye-off' : 'eye'} size={18} color={theme.muted} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.forgotRow}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.primary }}>Forgot Credentials?</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Slogan */}
+        <Text style={[styles.sloganSub, { color: theme.primary }]}>
+          SIMPLIFY YOUR ACADEMIC JOURNEY THROUGH
+        </Text>
+        <Text style={[styles.sloganMain, { color: theme.foreground }]}>Atmospheric Precision</Text>
+
+        {/* Stats strip */}
+        <View style={styles.statsRow}>
+          <StatBadge value="10M+" label="ATTENDANCE" theme={theme} />
+          <StatBadge value="1M+" label="APPROVALS" theme={theme} />
+          <StatBadge value="10y" label="EXCELLENCE" theme={theme} />
+        </View>
+
+        {/* Feature tiles */}
+        <View style={styles.tilesGrid}>
+          {[
+            { icon: 'calendar-month', label: 'Smart Schedule' },
+            { icon: 'robot', label: 'AI Copilot' },
+            { icon: 'check-circle-outline', label: 'Approvals' },
+            { icon: 'alert-outline', label: 'Issues' },
+            { icon: 'bell-outline', label: 'Alerts' },
+            { icon: 'shield-check', label: 'Roles' },
+          ].map((t) => (
+            <View key={t.label} style={[styles.tile, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <GradientIconCircle icon={t.icon} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.foregroundSoft, marginTop: 6 }}>{t.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* GET STARTED */}
+        <GradientButton label="GET STARTED" onPress={handleLogin} icon="arrow-right" style={{ marginTop: 20 }} />
+      </ScrollView>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#0F172A',
-        justifyContent: 'center',
-        padding: 24,
-    },
-    content: {
-        flex: 1,
-        justifyContent: 'space-around',
-    },
-    branding: {
-        alignItems: 'center',
-        marginTop: 60,
-    },
-    logo: {
-        fontSize: 56,
-        fontWeight: 'bold',
-        color: '#38BDF8',
-        letterSpacing: 4,
-        textShadowColor: 'rgba(56, 189, 248, 0.3)',
-        textShadowOffset: { width: 0, height: 4 },
-        textShadowRadius: 10,
-    },
-    subtitle: {
-        fontSize: 18,
-        color: '#94A3B8',
-        marginTop: 12,
-        letterSpacing: 1,
-        fontWeight: '500',
-    },
-    actionContainer: {
-        gap: 20,
-        marginBottom: 40,
-    },
-    primaryButton: {
-        backgroundColor: '#38BDF8',
-        paddingVertical: 18,
-        borderRadius: 16,
-        alignItems: 'center',
-        shadowColor: '#38BDF8',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 5,
-    },
-    buttonText: {
-        color: '#0F172A',
-        fontSize: 18,
-        fontWeight: 'bold',
-        letterSpacing: 0.5,
-    },
-    secondaryButton: {
-        backgroundColor: 'transparent',
-        paddingVertical: 18,
-        borderRadius: 16,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#334155',
-    },
-    secondaryButtonText: {
-        color: '#CBD5E1',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    sectionHeader: {
-        color: '#94A3B8',
-        fontSize: 14,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        textAlign: 'center',
-        marginBottom: 8,
-    },
-    demoButton: {
-        backgroundColor: '#1E293B',
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        borderRadius: 12,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#334155',
-    },
-    demoButtonText: {
-        color: '#E2E8F0',
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    divider: {
-        height: 1,
-        backgroundColor: '#334155',
-        marginVertical: 16,
-    }
+  root: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 48, paddingBottom: 40 },
+  logoArea: { alignItems: 'center', marginBottom: 20 },
+  logoIcon: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center', ...SHADOWS.glow, marginBottom: 12 },
+  brand: { fontSize: 32, fontWeight: '800', letterSpacing: 12 },
+  tagline: { fontSize: 10, fontWeight: '700', letterSpacing: 4, marginTop: 4 },
+  card: { borderRadius: RADIUS['3xl'], padding: 20, borderWidth: 1, ...SHADOWS.card, marginTop: 16 },
+  roleRow: { flexDirection: 'row', gap: 8 },
+  fieldGroup: { marginTop: 20 },
+  input: { borderBottomWidth: 1, paddingVertical: 8, fontSize: 14, fontWeight: '500' },
+  pwRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
+  pwInput: { flex: 1, paddingVertical: 8, fontSize: 14, fontWeight: '500' },
+  forgotRow: { marginTop: 12, alignItems: 'flex-end' },
+  sloganSub: { textAlign: 'center', fontSize: 11, letterSpacing: 3, fontWeight: '600', marginTop: 24 },
+  sloganMain: { textAlign: 'center', fontSize: 18, fontWeight: '700', marginTop: 4 },
+  statsRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  tilesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
+  tile: {
+    width: (width - 60) / 3 - 2,
+    borderRadius: RADIUS.xl,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    ...SHADOWS.soft,
+  },
 });

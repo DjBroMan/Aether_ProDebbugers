@@ -1,25 +1,22 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
+import { View, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../store/authStore';
 import { useEffect } from 'react';
 import { CommonActions, useNavigation } from '@react-navigation/native';
+import { GRADIENT, useTheme } from '../../constants/designTokens';
 
 export default function TabLayout() {
   const { user } = useAuthStore();
   const navigation = useNavigation();
+  const theme = useTheme();
 
+  // Auth guard — reset to login when logged out
   useEffect(() => {
-    console.log('[AUTH-GUARD] (tabs)/_layout user changed:', user ? user.role : 'NULL');
     if (!user) {
-      console.log('[AUTH-GUARD] Resetting navigation stack to login screen...');
-      // Use CommonActions.reset to blow away the entire navigation state and
-      // go directly to the root index screen. This is the React Navigation
-      // way to escape any nested navigator — it works regardless of nesting depth.
       navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'index' }],
-        })
+        CommonActions.reset({ index: 0, routes: [{ name: 'index' }] })
       );
     }
   }, [user]);
@@ -29,22 +26,39 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#0F172A',
+          backgroundColor: theme.tabBar,
           borderTopWidth: 1,
-          borderTopColor: '#1E293B',
+          borderTopColor: theme.tabBarBorder,
           paddingBottom: 8,
-          paddingTop: 8,
-          height: 60,
+          paddingTop: 4,
+          height: 64,
         },
-        tabBarActiveTintColor: '#38BDF8',
-        tabBarInactiveTintColor: '#64748B',
+        tabBarActiveTintColor: theme.tabBarActive,
+        tabBarInactiveTintColor: theme.tabBarInactive,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+        },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="view-dashboard" size={24} color={color} />
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? s.activeIconBg : undefined}>
+              <MaterialCommunityIcons name="home" size={22} color={color} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="approvals"
+        options={{
+          title: 'Schedule',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? s.activeIconBg : undefined}>
+              <MaterialCommunityIcons name="calendar-month" size={22} color={color} />
+            </View>
           ),
         }}
       />
@@ -52,45 +66,68 @@ export default function TabLayout() {
         name="ai"
         options={{
           title: 'Copilot',
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="robot" size={24} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={s.centerTab}>
+              <LinearGradient
+                colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={s.centerOrb}
+              >
+                <MaterialCommunityIcons name="creation" size={28} color="#FFF" />
+              </LinearGradient>
+            </View>
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="approvals"
-        options={{
-          title: 'Approvals',
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="file-document-outline" size={24} color={color} />
-          ),
+          tabBarLabel: () => null,
         }}
       />
       <Tabs.Screen
         name="report"
         options={{
-          title: 'Report',
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="camera-iris" size={24} color={color} />
+          title: 'Alerts',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? s.activeIconBg : undefined}>
+              <MaterialCommunityIcons name="bell-outline" size={22} color={color} />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="account-circle-outline" size={24} color={color} />
+          title: 'Me',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? s.activeIconBg : undefined}>
+              <MaterialCommunityIcons name="account" size={22} color={color} />
+            </View>
           ),
         }}
       />
-      <Tabs.Screen
-        name="admin"
-        options={{
-          title: 'Admin',
-          href: null,
-        }}
-      />
+      {/* Hidden screens */}
+      <Tabs.Screen name="admin" options={{ href: null }} />
+      <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
   );
 }
+
+const s = StyleSheet.create({
+  activeIconBg: {
+    backgroundColor: 'rgba(124,58,237,0.12)',
+    borderRadius: 12,
+    padding: 6,
+  },
+  centerTab: {
+    marginTop: -28,
+  },
+  centerOrb: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+});

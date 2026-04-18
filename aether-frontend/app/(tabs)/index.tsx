@@ -1,33 +1,29 @@
-import { View, Text } from 'react-native';
+import React from 'react';
+import { View, Text, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import StudentDashboard from '../../components/dashboard/StudentDashboard';
 import FacultyDashboard from '../../components/dashboard/FacultyDashboard';
-import AdminDashboardComponent from '../../components/dashboard/AdminDashboardComponent';
+import AdminDashboard from '../../components/dashboard/AdminDashboardComponent';
+import { useTheme } from '../../constants/designTokens';
 
-export default function DashboardWrapper() {
-  const { user } = useAuthStore();
+export default function DashboardTab() {
+  const theme = useTheme();
+  const user = useAuthStore((s) => s.user);
 
   if (!user) {
-    // Invisible — root layout's useEffect will redirect to '/' momentarily
-    return null;
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
   }
 
-  if (user.role === 'STUDENT') {
-    return <StudentDashboard />;
+  switch (user.role) {
+    case 'FACULTY':
+      return <FacultyDashboard />;
+    case 'ADMIN':
+      return <AdminDashboard />;
+    default:
+      return <StudentDashboard />;
   }
-
-  if (user.role === 'FACULTY') {
-    return <FacultyDashboard authorityLevel={user.authorityLevel} />;
-  }
-
-  if (user.role === 'ADMIN') {
-    return <AdminDashboardComponent />;
-  }
-
-  // Fallback
-  return (
-    <View className="flex-1 bg-aether-bg justify-center items-center">
-      <Text className="text-aether-text">Unknown Role: {user.role}</Text>
-    </View>
-  );
 }

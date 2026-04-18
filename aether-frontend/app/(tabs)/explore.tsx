@@ -1,112 +1,100 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme, GRADIENT, SHADOWS, RADIUS, FONT } from '../../constants/designTokens';
+import { GradientCard, GradientIconCircle, GlassCard, GradientButton, SectionHeader } from '../../components/ui/AetherUI';
+import { useCampusStore } from '../../store/campusStore';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+const ICONS: Record<string, string> = {
+  coffee: 'coffee',
+  'flask-conical': 'flask',
+  library: 'book-open-variant',
+  bus: 'bus',
+  'heart-pulse': 'heart-pulse',
+  users: 'account-group',
+};
 
-export default function TabTwoScreen() {
+export default function ExploreScreen() {
+  const theme = useTheme();
+  const { miniApps, toggleMiniApp } = useCampusStore();
+  const installedCount = miniApps.filter((a) => a.installed).length;
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
+    <ScrollView style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+      {/* Hero */}
+      <GradientCard>
+        <View style={{ zIndex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <MaterialCommunityIcons name="creation" size={12} color="rgba(255,255,255,0.9)" />
+            <Text style={{ fontSize: 10, letterSpacing: 3, fontWeight: '700', color: 'rgba(255,255,255,0.9)' }}>API-FIRST</Text>
+          </View>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFF', marginTop: 8 }}>One shell.{'\n'}Endless mini-apps.</Text>
+          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 8 }}>{installedCount} of {miniApps.length} installed · Sandboxed permissions</Text>
+        </View>
+      </GradientCard>
+
+      {/* App grid */}
+      <View style={s.grid}>
+        {miniApps.map((app) => {
+          const iconName = ICONS[app.icon] ?? 'creation';
+          return (
+            <View key={app.id} style={[s.appCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <GradientIconCircle icon={iconName} size={44} iconSize={20} />
+                {app.installed && (
+                  <View style={[s.onBadge, { backgroundColor: theme.accent }]}>
+                    <MaterialCommunityIcons name="check-circle" size={10} color={theme.primary} />
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.primary }}>ON</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: theme.foreground, marginTop: 12 }}>{app.name}</Text>
+              <Text style={{ fontSize: 11, color: theme.muted, marginTop: 2, flex: 1 }}>{app.description}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
+                <MaterialCommunityIcons name="shield-check" size={10} color={theme.muted} />
+                <Text style={{ fontSize: 9, color: theme.muted }} numberOfLines={1}>{app.permissions.join(' · ')}</Text>
+              </View>
+              {app.installed ? (
+                <TouchableOpacity onPress={() => toggleMiniApp(app.id)} style={[s.installBtn, { backgroundColor: theme.secondary }]}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.muted }}>Uninstall</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={() => toggleMiniApp(app.id)} activeOpacity={0.9}>
+                  <LinearGradient
+                    colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={[s.installBtn, SHADOWS.glow]}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>Install</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
         })}
-      </Collapsible>
-    </ParallaxScrollView>
+      </View>
+
+      {/* Build your own */}
+      <GlassCard theme={theme} style={{ marginTop: 16, marginBottom: 30 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <GradientIconCircle icon="plus" size={44} iconSize={22} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: theme.foreground }}>Build your own mini-app</Text>
+            <Text style={{ fontSize: 11, color: theme.muted }}>REST + webhook bridge · Manifest v1</Text>
+          </View>
+          <View style={{ backgroundColor: theme.accent, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: theme.primary }}>DEV</Text>
+          </View>
+        </View>
+      </GlassCard>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+const s = StyleSheet.create({
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16 },
+  appCard: { width: '47.5%', borderRadius: RADIUS.xl, padding: 12, borderWidth: 1, ...SHADOWS.soft },
+  onBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
+  installBtn: { borderRadius: RADIUS.full, paddingVertical: 8, alignItems: 'center', marginTop: 12 },
 });

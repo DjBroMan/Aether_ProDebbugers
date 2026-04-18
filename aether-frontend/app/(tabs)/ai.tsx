@@ -1,122 +1,164 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import axios from 'axios';
-import { Audio } from 'expo-av';
-import { API_BASE_URL } from '../../constants/api';
-import { useAuthStore } from '../../store/authStore';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme, GRADIENT, SHADOWS, RADIUS, FONT } from '../../constants/designTokens';
+import { GradientIconCircle } from '../../components/ui/AetherUI';
 
-type Message = { id: string; text: string; sender: 'user' | 'ai'; source?: string; isVoice?: boolean };
+type Msg = { role: 'user' | 'bot'; text: string; cta?: { label: string; icon: string } };
+const seed: Msg[] = [
+  { role: 'bot', text: "Hi! I'm your Campus Copilot. Ask me about your schedule, dues, or approvals." },
+];
 
 export default function CopilotScreen() {
-  const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: 'Hello! I am your Aether AI Campus Copilot. How can I assist you with your schedule, approvals, or tasks today?', sender: 'ai' }
-  ]);
-  const [loading, setLoading] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | undefined>();
-  const { user } = useAuthStore();
+  const theme = useTheme();
+  const [msgs, setMsgs] = useState<Msg[]>(seed);
+  const [input, setInput] = useState('');
+  const [typing, setTyping] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
-  const handleSend = async (forcedText?: string) => {
-    const activeText = forcedText || query;
-    if (!activeText.trim()) return;
-    
-    const newMsg: Message = { id: Date.now().toString(), text: activeText, sender: 'user', isVoice: !!forcedText };
-    setMessages(prev => [...prev, newMsg]);
-    setQuery('');
-    setLoading(true);
+  useEffect(() => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, [msgs, typing]);
 
-    try {
-      const res = await axios.post(
-        `${API_BASE_URL}/api/ai/query`,
-        { prompt: newMsg.text },
-        { headers: { Authorization: `Bearer ${user?.token || 'DEV_TOKEN'}` }, timeout: 30000 } 
-      );
-      setMessages(prev => [...prev, { id: Date.now().toString(), text: res.data.answer, sender: 'ai', source: res.data.source }]);
-    } catch (e: any) {
-      const errMsg = e?.response?.data?.error || 'AI service is temporarily unreachable. The backend may need a restart.';
-      setMessages(prev => [...prev, { id: Date.now().toString(), text: errMsg, sender: 'ai' }]);
-    } finally {
-      setLoading(false);
-    }
+  const send = (text?: string) => {
+    const q = (text ?? input).trim();
+    if (!q) return;
+    setMsgs((m) => [...m, { role: 'user', text: q }]);
+    setInput('');
+    setTyping(true);
+    setTimeout(() => {
+      const lower = q.toLowerCase();
+      let reply: Msg = { role: 'bot', text: 'I can help with schedule, dues, approvals or rooms. Try one of those!' };
+      if (lower.includes('schedule') || lower.includes('class')) {
+        reply = {
+          role: 'bot',
+          text: 'You have 3 classes today: Calculus II at 9:00 (B-201), Quantum Physics at 10:30 (A-104), and Lab — Circuits at 13:00 (Lab-3).',
+          cta: { label: 'Open Schedule', icon: 'calendar' },
+        };
+      } else if (lower.includes('due') || lower.includes('pay') || lower.includes('fee')) {
+        reply = { role: 'bot', text: 'You have ₹1,250 in pending dues across 3 items. Want to settle now?', cta: { label: 'Pay Dues', icon: 'credit-card' } };
+      } else if (lower.includes('leave') || lower.includes('approval')) {
+        reply = { role: 'bot', text: 'Your leave from Apr 16 was approved. 1 request still in review.', cta: { label: 'View Approvals', icon: 'file-document' } };
+      }
+      setMsgs((m) => [...m, reply]);
+      setTyping(false);
+    }, 900);
   };
 
-  const startRecording = async () => {
-    try {
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-    } catch (err) {
-      console.error('Failed to start recording', err);
-    }
-  };
-
-  const stopRecording = async () => {
-    setRecording(undefined);
-    await recording?.stopAndUnloadAsync();
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-    // In full prod, we would upload this URI. To mock backend STT here:
-    handleSend('When is my next Class? [Parsed via Voice]');
-  };
+  const suggestions = ["What's my schedule today?", 'Any pending dues?', 'Status of my leave?'];
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 bg-aether-bg">
-      <View className="pt-16 pb-4 px-6 border-b border-aether-border bg-aether-surface">
-        <Text className="text-aether-text text-2xl font-bold">Aether Copilot</Text>
-        <Text className="text-aether-primary text-sm tracking-wide font-medium">✨ Powered by Triple-Fallback AI</Text>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Header */}
+      <View style={[s.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+        <GradientIconCircle icon="creation" size={36} iconSize={18} />
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: theme.foreground }}>Campus Copilot</Text>
+          <Text style={{ fontSize: 11, color: theme.muted }}>Powered by AETHER AI</Text>
+        </View>
       </View>
 
-      <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 20 }}>
-        {messages.map(msg => (
-          <View key={msg.id} className={`max-w-[85%] rounded-2xl p-4 mb-4 ${msg.sender === 'user' ? 'bg-aether-primary self-end rounded-tr-sm' : 'bg-aether-surface self-start rounded-tl-sm border border-aether-border'}`}>
-            <Text className={`text-base ${msg.sender === 'user' ? 'text-aether-bg font-medium' : 'text-aether-text'}`}>
-              {msg.isVoice ? '🎙️ ' : ''}{msg.text}
-            </Text>
-            {msg.source && (
-              <Text className="text-xs text-aether-muted mt-2">
-                Processed via: {msg.source}
-              </Text>
+      {/* Hero orb (only when few messages) */}
+      {msgs.length <= 1 && (
+        <View style={s.orbArea}>
+          <LinearGradient
+            colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]}
+            style={s.orb}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          >
+            <MaterialCommunityIcons name="creation" size={40} color="#FFF" />
+          </LinearGradient>
+          <Text style={[FONT.tiny, { color: theme.muted, marginTop: 8 }]}>YOUR PERSONAL AI</Text>
+        </View>
+      )}
+
+      {/* Messages */}
+      <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+        {msgs.map((m, i) => (
+          <View key={i} style={[s.msgRow, m.role === 'user' && { justifyContent: 'flex-end' }]}>
+            {m.role === 'bot' && <GradientIconCircle icon="creation" size={32} iconSize={16} />}
+            {m.role === 'user' ? (
+              <LinearGradient
+                colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={[s.bubble, s.userBubble, SHADOWS.glow]}
+              >
+                <Text style={{ fontSize: 14, color: '#FFF' }}>{m.text}</Text>
+              </LinearGradient>
+            ) : (
+              <View style={[s.bubble, s.botBubble, { backgroundColor: theme.card, ...SHADOWS.soft, borderWidth: 1, borderColor: theme.border }]}>
+                <Text style={{ fontSize: 14, color: theme.foreground }}>{m.text}</Text>
+                {m.cta && (
+                  <TouchableOpacity style={[s.ctaBtn, { backgroundColor: theme.accent }]}>
+                    <MaterialCommunityIcons name={m.cta.icon as any} size={14} color={theme.primary} />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary }}>{m.cta.label}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
           </View>
         ))}
-        {loading && (
-          <View className="bg-aether-surface self-start rounded-2xl rounded-tl-sm border border-aether-border p-4 mb-4 flex-row items-center">
-            <ActivityIndicator color="#38BDF8" size="small" />
-            <Text className="text-aether-muted ml-3">Synthesizing context...</Text>
+        {typing && (
+          <View style={s.msgRow}>
+            <GradientIconCircle icon="creation" size={32} iconSize={16} />
+            <View style={[s.bubble, s.botBubble, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, flexDirection: 'row', gap: 6, paddingVertical: 12 }]}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.primary, opacity: 0.5 + i * 0.2 }} />
+              ))}
+            </View>
           </View>
         )}
       </ScrollView>
 
-      <View className="p-4 bg-aether-surface border-t border-aether-border flex-row items-center gap-3">
-        <TextInput
-          className="flex-1 bg-aether-bg text-aether-text px-5 py-4 rounded-full border border-aether-border text-base"
-          placeholder="Ask about your campus life..."
-          placeholderTextColor="#64748B"
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={() => handleSend()}
-        />
-        
-        {query.trim() === '' ? (
-          <TouchableOpacity 
-            className={`w-14 h-14 rounded-full items-center justify-center ${recording ? 'bg-aether-danger' : 'bg-aether-surface border border-aether-border'}`}
-            onPressIn={startRecording}
-            onPressOut={stopRecording}
-            disabled={loading}
-          >
-            <MaterialCommunityIcons name="microphone" size={24} color={recording ? '#0F172A' : '#38BDF8'} />
+      {/* Suggestions + Input */}
+      <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 8 }}>
+          {suggestions.map((q) => (
+            <TouchableOpacity key={q} onPress={() => send(q)}
+              style={[s.suggestionChip, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.foregroundSoft }}>{q}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <View style={[s.inputBar, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}>
+          <TouchableOpacity style={[s.micBtn, { backgroundColor: theme.secondary }]}>
+            <MaterialCommunityIcons name="microphone" size={16} color={theme.primary} />
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity 
-            className="bg-aether-primary w-14 h-14 rounded-full items-center justify-center"
-            onPress={() => handleSend()}
-            disabled={loading}
-          >
-            <MaterialCommunityIcons name="send" size={24} color="#0F172A" />
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={() => send()}
+            placeholder="Ask Copilot anything…"
+            placeholderTextColor={theme.muted}
+            style={{ flex: 1, fontSize: 14, color: theme.foreground, paddingHorizontal: 8 }}
+          />
+          <TouchableOpacity onPress={() => send()}>
+            <LinearGradient
+              colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]}
+              style={s.sendBtn}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            >
+              <MaterialCommunityIcons name="send" size={16} color="#FFF" />
+            </LinearGradient>
           </TouchableOpacity>
-        )}
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
+
+const s = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  orbArea: { alignItems: 'center', paddingVertical: 16 },
+  orb: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', ...SHADOWS.glow },
+  msgRow: { flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'flex-end' },
+  bubble: { maxWidth: '78%', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 },
+  userBubble: { borderBottomRightRadius: 6 },
+  botBubble: { borderBottomLeftRadius: 6 },
+  ctaBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start' },
+  suggestionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+  inputBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 28, paddingHorizontal: 6, paddingVertical: 6, ...SHADOWS.card },
+  micBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', ...SHADOWS.glow },
+});

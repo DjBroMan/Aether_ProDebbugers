@@ -30,9 +30,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   loggedOut: false,
   setUser: (user) => set({ user, loggedOut: false }),
   setLoading: (isLoading) => set({ isLoading }),
-  logout: () => {
-    console.log('[STORE] logout() called — setting user: null, loggedOut: true');
-    set({ user: null, loggedOut: true });
-  },
+  logout: () => set({ user: null, loggedOut: true }),
   clearLoggedOut: () => set({ loggedOut: false }),
 }));

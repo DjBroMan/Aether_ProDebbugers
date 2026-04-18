@@ -1,107 +1,176 @@
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useAuthStore } from '../../store/authStore';
+import React from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import axios from 'axios';
-import { API_BASE_URL } from '../../constants/api';
+import { useTheme } from '../../constants/designTokens';
+import { GRADIENT, SHADOWS, RADIUS, FONT } from '../../constants/designTokens';
+import {
+  GradientCard, GradientIconCircle, QuickTile, GlassCard,
+  WelcomeBar, SectionHeader,
+} from '../ui/AetherUI';
+import { useAuthStore } from '../../store/authStore';
+import { useCampusStore } from '../../store/campusStore';
+
+const classes = [
+  { time: '09:00', name: 'Calculus II', room: 'B-201' },
+  { time: '10:30', name: 'Quantum Physics', room: 'A-104' },
+  { time: '13:00', name: 'Lab — Circuits', room: 'Lab-3' },
+];
 
 export default function StudentDashboard() {
-  const { user } = useAuthStore();
+  const theme = useTheme();
   const router = useRouter();
-  
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [taskRes, eventRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/tasks`, { headers: { Authorization: `Bearer ${user?.token || 'DEV_TOKEN'}` } }),
-          axios.get(`${API_BASE_URL}/api/schedule`, { headers: { Authorization: `Bearer ${user?.token || 'DEV_TOKEN'}` } })
-        ]);
-        setTasks(taskRes.data);
-        setEvents(eventRes.data);
-      } catch (err) {
-        console.error('Data sync failed:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [user]);
-
-  const activeTasks = tasks.filter(t => t.status !== 'COMPLETED');
-  const upNext = events.find(e => new Date(e.startTime) > new Date()) || events[0];
+  const { user, logout } = useAuthStore();
+  const notifications = useCampusStore((s) => s.notifications);
+  const displayName = user?.name ?? 'Student';
+  const initial = displayName[0]?.toUpperCase() ?? 'S';
+  const unread = notifications.some((n) => !n.read);
 
   return (
-    <ScrollView className="flex-1 bg-aether-bg p-6">
-      <View className="mt-12 mb-8">
-        <Text className="text-aether-muted text-lg tracking-wide uppercase font-semibold">
-          {user?.role || 'STUDENT'} DASHBOARD
-        </Text>
-        <Text className="text-aether-text text-4xl font-bold mt-2">
-          Hello, {user?.name?.split(' ')[0] || 'Aether'}
-        </Text>
-      </View>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Welcome bar */}
+      <WelcomeBar
+        roleLabel="WELCOME"
+        name={displayName}
+        initial={initial}
+        onBell={() => {}}
+        onLogout={logout}
+        theme={theme}
+        unread={unread}
+      />
 
-      {/* Stats Cards */}
-      <View className="flex-row gap-4 mb-8">
-        <View className="flex-1 bg-aether-surface p-4 rounded-2xl border border-aether-border">
-          <MaterialCommunityIcons name="calendar-clock" size={32} color="#38BDF8" />
-          <Text className="text-aether-text font-bold text-2xl mt-4">
-            {loading ? <ActivityIndicator size="small" color="#38BDF8" /> : events.length}
-          </Text>
-          <Text className="text-aether-muted font-medium">Classes Today</Text>
-        </View>
-        <View className="flex-1 bg-aether-surface p-4 rounded-2xl border border-aether-border">
-          <MaterialCommunityIcons name="alert-circle-outline" size={32} color="#F87171" />
-          <Text className="text-aether-text font-bold text-2xl mt-4">
-             {loading ? <ActivityIndicator size="small" color="#F87171" /> : activeTasks.length}
-          </Text>
-          <Text className="text-aether-muted font-medium">Pending Tasks</Text>
-        </View>
-      </View>
-
-      {/* Upcoming Class */}
-      <Text className="text-aether-text text-xl font-bold mb-4">Up Next</Text>
-      {upNext ? (
-        <View className="bg-aether-primary p-5 rounded-2xl mb-8">
-          <View className="flex-row justify-between items-center bg-aether-secondary px-3 py-1 rounded-full self-start mb-4">
-            <Text className="text-white font-bold text-xs uppercase tracking-wider">
-               {new Date(upNext.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+      {/* Hero greeting card */}
+      <GradientCard style={{ marginTop: 16 }}>
+        <View style={{ position: 'relative', zIndex: 1 }}>
+          <Text style={styles.heroLabel}>B.TECH FY-A</Text>
+          <Text style={styles.heroTitle}>
+            Good morning,{' '}
+            <Text style={{ textDecorationLine: 'underline', textDecorationColor: 'rgba(255,255,255,0.4)' }}>
+              {displayName.split(' ')[0]}
             </Text>
-          </View>
-          <Text className="text-white text-2xl font-bold">{upNext.title}</Text>
-          <View className="flex-row items-center mt-2">
-            <MaterialCommunityIcons name="map-marker" size={16} color="white" />
-            <Text className="text-white ml-2 font-medium">{upNext.location}</Text>
-          </View>
-        </View>
-      ) : (
-        <View className="bg-aether-surface p-5 rounded-2xl border border-aether-border mb-8">
-          <Text className="text-aether-muted italic">No upcoming classes fetched.</Text>
-        </View>
-      )}
+          </Text>
+          <Text style={styles.heroSubtitle}>4 classes today · 2 pending tasks</Text>
 
-      {/* Quick Actions */}
-      <Text className="text-aether-text text-xl font-bold mb-4">Quick Actions</Text>
-      <View className="flex-row flex-wrap gap-4 mb-12">
-        <QuickAction icon="ticket-confirmation-outline" label="Issue Report" color="#FBBF24" onPress={() => router.push('/(tabs)/report')} />
-        <QuickAction icon="cash-fast" label="Pay Fees" color="#34D399" onPress={() => router.push('/finance')} />
+          {/* Stats row */}
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStat}>
+              <MaterialCommunityIcons name="clock-outline" size={16} color="#FFF" />
+              <Text style={styles.heroStatLabel}>NEXT</Text>
+              <Text style={styles.heroStatValue}>10:30</Text>
+            </View>
+            <View style={styles.heroStat}>
+              <MaterialCommunityIcons name="format-list-checks" size={16} color="#FFF" />
+              <Text style={styles.heroStatLabel}>TASKS</Text>
+              <Text style={styles.heroStatValue}>2</Text>
+            </View>
+            <View style={styles.heroStat}>
+              <MaterialCommunityIcons name="wallet-outline" size={16} color="#FFF" />
+              <Text style={styles.heroStatLabel}>DUES</Text>
+              <Text style={styles.heroStatValue}>₹1,250</Text>
+            </View>
+          </View>
+        </View>
+      </GradientCard>
+
+      {/* Quick actions */}
+      <View style={styles.quickRow}>
+        <QuickTile icon="file-document-outline" label="Approvals" onPress={() => router.push('/(tabs)/approvals')} theme={theme} />
+        <QuickTile icon="alert-outline" label="Issues" onPress={() => router.push('/(tabs)/report')} theme={theme} />
+        <QuickTile icon="credit-card-outline" label="Pay Dues" onPress={() => {}} theme={theme} />
+        <QuickTile icon="apps" label="Super App" onPress={() => router.push('/(tabs)/explore')} theme={theme} />
       </View>
+
+      {/* Next class card */}
+      <GlassCard theme={theme} style={{ marginTop: 16 }}>
+        <Text style={[FONT.tiny, { color: theme.primary }]}>NEXT CLASS</Text>
+        <View style={styles.nextClassRow}>
+          <GradientIconCircle icon="clock-outline" size={48} iconSize={22} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.foreground }}>Quantum Physics · 10:30</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <MaterialCommunityIcons name="map-marker-outline" size={12} color={theme.muted} />
+              <Text style={{ fontSize: 12, color: theme.muted }}>A-104</Text>
+            </View>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={18} color={theme.muted} />
+        </View>
+      </GlassCard>
+
+      {/* Today's schedule */}
+      <GlassCard theme={theme} style={{ marginTop: 16 }}>
+        <SectionHeader icon="calendar" title="Today" trailing={{ text: 'Week →', onPress: () => {} }} theme={theme} />
+        <View style={{ gap: 8 }}>
+          {classes.map((c) => (
+            <View key={c.time} style={[styles.classItem, { backgroundColor: theme.secondary }]}>
+              <GradientIconCircle icon="clock-outline" size={44} iconSize={18} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.foreground }}>{c.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                  <MaterialCommunityIcons name="map-marker-outline" size={12} color={theme.muted} />
+                  <Text style={{ fontSize: 11, color: theme.muted }}>{c.room} · {c.time}</Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={18} color={theme.muted} />
+            </View>
+          ))}
+        </View>
+      </GlassCard>
+
+      {/* Copilot CTA */}
+      <GlassCard theme={theme} style={{ marginTop: 16 }}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/ai')} style={styles.copilotRow} activeOpacity={0.8}>
+          <GradientIconCircle icon="creation" size={44} iconSize={22} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: theme.foreground }}>Ask Campus Copilot</Text>
+            <Text style={{ fontSize: 12, color: theme.muted }}>"What's my schedule today?"</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={18} color={theme.muted} />
+        </TouchableOpacity>
+      </GlassCard>
+
+      {/* Recent notifications */}
+      <GlassCard theme={theme} style={{ marginTop: 16, marginBottom: 20 }}>
+        <SectionHeader title="Recent" trailing={{ text: 'All →', onPress: () => {} }} theme={theme} />
+        {[
+          { icon: 'bell-outline', text: 'Assignment due tomorrow', sub: '2h ago' },
+          { icon: 'clock-outline', text: 'Leave request approved', sub: '5h ago' },
+          { icon: 'alert-outline', text: 'Lab venue → Lab-3', sub: '1d ago' },
+        ].map((n) => (
+          <View key={n.text} style={[styles.notifItem, { marginBottom: 12 }]}>
+            <View style={[styles.notifIcon, { backgroundColor: theme.accent }]}>
+              <MaterialCommunityIcons name={n.icon as any} size={16} color={theme.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground }}>{n.text}</Text>
+              <Text style={{ fontSize: 11, color: theme.muted }}>{n.sub}</Text>
+            </View>
+          </View>
+        ))}
+      </GlassCard>
     </ScrollView>
   );
 }
 
-function QuickAction({ icon, label, color, onPress }: { icon: keyof typeof MaterialCommunityIcons.glyphMap, label: string, color: string, onPress: () => void }) {
-  return (
-    <TouchableOpacity onPress={onPress} className="w-[47%] bg-aether-surface p-4 rounded-xl flex-row items-center border border-aether-border">
-      <View style={{ backgroundColor: `${color}20` }} className="p-3 rounded-full mr-3">
-        <MaterialCommunityIcons name={icon} size={24} color={color} />
-      </View>
-      <Text className="text-aether-text font-semibold flex-1">{label}</Text>
-    </TouchableOpacity>
-  );
-}
+const styles = StyleSheet.create({
+  content: { padding: 16 },
+  heroLabel: { fontSize: 10, letterSpacing: 3, fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
+  heroTitle: { fontSize: 24, fontWeight: '800', color: '#FFF', marginTop: 4 },
+  heroSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  heroStatsRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  heroStat: {
+    flex: 1, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.15)',
+    padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  heroStatLabel: { fontSize: 10, letterSpacing: 2, fontWeight: '700', color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+  heroStatValue: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  quickRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  nextClassRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  classItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 10 },
+  copilotRow: { flexDirection: 'row', alignItems: 'center' },
+  notifItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  notifIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+});
