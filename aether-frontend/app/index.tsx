@@ -12,12 +12,23 @@ WebBrowser.maybeCompleteAuthSession();
 export default function LandingScreen() {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const router = useRouter();
-    const { setUser, setLoading, isLoading } = useAuthStore();
+    const { setUser, setLoading, isLoading, user } = useAuthStore();
     const [request, response, promptAsync] = Google.useAuthRequest({
         webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || 'dummy.apps.googleusercontent.com',
         androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || 'dummy-android.apps.googleusercontent.com',
         iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || 'dummy-ios.apps.googleusercontent.com',
     });
+
+    // If already logged in (e.g. app restart with persisted session), skip login screen
+    useEffect(() => {
+        console.log('[AUTH] index.tsx useEffect fired. user:', user ? user.role : 'NULL');
+        if (user) {
+            console.log('[AUTH] User found on landing — redirecting to /(tabs)');
+            router.replace('/(tabs)');
+        } else {
+            console.log('[AUTH] No user on landing — showing login screen. Good.');
+        }
+    }, [user]);
 
     useEffect(() => {
         Animated.timing(fadeAnim, {
@@ -54,8 +65,15 @@ export default function LandingScreen() {
         }
     };
 
-    const enterDevMode = () => {
-        setUser({ id: 'dev123', name: 'Priyank', email: 'priyank@university.edu', role: 'STUDENT', token: 'DEV_TOKEN' });
+    const loginDemo = (roleName: string, role: 'STUDENT' | 'FACULTY' | 'ADMIN', level?: number) => {
+        setUser({ 
+            id: `demo_${role.toLowerCase()}${level ? `_${level}` : ''}`, 
+            name: `Demo ${roleName}`, 
+            email: `${roleName.toLowerCase()}@university.edu`, 
+            role: role, 
+            authorityLevel: level,
+            token: 'DEV_TOKEN' 
+        });
         router.replace('/(tabs)');
     };
 
@@ -72,16 +90,31 @@ export default function LandingScreen() {
                         <ActivityIndicator size="large" color="#38BDF8" style={{ paddingVertical: 18 }} />
                     ) : (
                         <>
+                            <Text style={styles.sectionHeader}>Quick Demo Login</Text>
+                            <Pressable style={styles.demoButton} onPress={() => loginDemo('Student', 'STUDENT')}>
+                                <Text style={styles.demoButtonText}>🎓 Login as Student</Text>
+                            </Pressable>
+                            <Pressable style={styles.demoButton} onPress={() => loginDemo('Teacher', 'FACULTY', 1)}>
+                                <Text style={styles.demoButtonText}>👨‍🏫 Login as Teacher (L1)</Text>
+                            </Pressable>
+                            <Pressable style={styles.demoButton} onPress={() => loginDemo('HOD', 'FACULTY', 2)}>
+                                <Text style={styles.demoButtonText}>🏢 Login as HOD (L2)</Text>
+                            </Pressable>
+                            <Pressable style={styles.demoButton} onPress={() => loginDemo('Principal', 'FACULTY', 3)}>
+                                <Text style={styles.demoButtonText}>🏛️ Login as Principal (L3)</Text>
+                            </Pressable>
+                            <Pressable style={styles.demoButton} onPress={() => loginDemo('Admin', 'ADMIN')}>
+                                <Text style={styles.demoButtonText}>⚙️ Login as Admin</Text>
+                            </Pressable>
+                            
+                            <View style={styles.divider} />
+
                             <Pressable 
                                 style={styles.primaryButton}
                                 disabled={!request}
                                 onPress={() => promptAsync()}
                             >
                                 <Text style={styles.buttonText}>Login with Google</Text>
-                            </Pressable>
-                            
-                            <Pressable style={styles.secondaryButton} onPress={enterDevMode}>
-                                <Text style={styles.secondaryButtonText}>Enter Developer Mode</Text>
                             </Pressable>
                         </>
                     )}
@@ -155,5 +188,33 @@ const styles = StyleSheet.create({
         color: '#CBD5E1',
         fontSize: 16,
         fontWeight: '600',
+    },
+    sectionHeader: {
+        color: '#94A3B8',
+        fontSize: 14,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    demoButton: {
+        backgroundColor: '#1E293B',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#334155',
+    },
+    demoButtonText: {
+        color: '#E2E8F0',
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    divider: {
+        height: 1,
+        backgroundColor: '#334155',
+        marginVertical: 16,
     }
 });

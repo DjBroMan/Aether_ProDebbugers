@@ -1,7 +1,29 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/authStore';
+import { useEffect } from 'react';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 
 export default function TabLayout() {
+  const { user } = useAuthStore();
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    console.log('[AUTH-GUARD] (tabs)/_layout user changed:', user ? user.role : 'NULL');
+    if (!user) {
+      console.log('[AUTH-GUARD] Resetting navigation stack to login screen...');
+      // Use CommonActions.reset to blow away the entire navigation state and
+      // go directly to the root index screen. This is the React Navigation
+      // way to escape any nested navigator — it works regardless of nesting depth.
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'index' }],
+        })
+      );
+    }
+  }, [user]);
+
   return (
     <Tabs
       screenOptions={{
@@ -66,7 +88,7 @@ export default function TabLayout() {
         name="admin"
         options={{
           title: 'Admin',
-          href: null, // Hidden from bottom tab bar, accessed via Dashboard quick action
+          href: null,
         }}
       />
     </Tabs>
