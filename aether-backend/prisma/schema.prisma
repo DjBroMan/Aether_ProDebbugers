@@ -18,6 +18,7 @@ model User {
   tickets   Ticket[]      @relation("UserTickets")
   tasks     Task[]        @relation("UserTasks")
   approvals Approval[]    @relation("UserApprovals")
+  announcements Announcement[] @relation("UserAnnouncements")
 }
 
 enum Role {
@@ -70,3 +71,14 @@ model Event {
   professorId String
   // "Clash Detection" checks overlaps using startTime, endTime, and location.
 }
+
+model Announcement {
+  id          String   @id @default(uuid())
+  title       String
+  body        String
+  audience    String   @default("ALL") // e.g. "ALL", "STUDENT", "FACULTY"
+  authorId    String
+  author      User     @relation("UserAnnouncements", fields: [authorId], references: [id])
+  createdAt   DateTime @default(now())
+}
+

@@ -50,7 +50,7 @@ export default function LandingScreen() {
       email: `${userId}@aether.edu`,
       role: roleMap[role],
       authorityLevel: authorityMap[role],
-      token: 'demo-token',
+      token: 'MOCK_TOKEN',
     });
   };
 

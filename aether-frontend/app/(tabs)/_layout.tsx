@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../store/authStore';
+import { useCampusStore } from '../../store/campusStore';
 import { useEffect } from 'react';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { GRADIENT, useTheme } from '../../constants/designTokens';
@@ -12,12 +13,16 @@ export default function TabLayout() {
   const navigation = useNavigation();
   const theme = useTheme();
 
-  // Auth guard — reset to login when logged out
+  // Auth guard & Real-time init
   useEffect(() => {
     if (!user) {
+      useCampusStore.getState().stopRealTimeSync();
       navigation.dispatch(
         CommonActions.reset({ index: 0, routes: [{ name: 'index' }] })
       );
+    } else {
+      useCampusStore.getState().initRealTimeSync(user.role, user.id);
+      useCampusStore.getState().fetchDashboardData(user.token, user.role);
     }
   }, [user]);
 

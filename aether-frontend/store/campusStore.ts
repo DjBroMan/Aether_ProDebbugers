@@ -167,8 +167,15 @@ interface CampusState {
   pushNotification: (input: { title: string; body: string; to: string; kind: CampusNotification['kind'] }) => void;
   markAllRead: () => void;
   addScheduleEvent: (input: Omit<ScheduleEvent, 'id'>) => ScheduleEvent;
-  toggleMiniApp: (appId: string) => void;
+  // Backend Integration
+  fetchDashboardData: (token: string, role: string) => Promise<void>;
+  initRealTimeSync: (role: string, userId: string) => void;
+  stopRealTimeSync: () => void;
 }
+
+import axios from 'axios';
+import { API_BASE_URL } from '../constants/api';
+import { socketService } from '../services/socket';
 
 export const useCampusStore = create<CampusState>((set, get) => ({
   approvals: [
@@ -324,6 +331,72 @@ export const useCampusStore = create<CampusState>((set, get) => ({
   toggleMiniApp: (appId) => {
     set((s) => ({ miniApps: s.miniApps.map((m) => (m.id === appId ? { ...m, installed: !m.installed } : m)) }));
   },
+
+  // ─── Backend Integration ────────────────────────────────
+  fetchDashboardData: async (token, role) => {
+    try {
+      const endpoint = role === 'STUDENT' ? '/api/dashboard/student' : '/api/dashboard/faculty';
+      const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'x-mock-role': role 
+        }
+      });
+      const data = res.data;
+      
+      // Map API notices to store notices
+      if (data.announcements) {
+        const mappedNotices = data.announcements.map((a: any) => ({
+          id: a.id,
+          by: a.author.name,
+          title: a.title,
+          body: a.body,
+          at: new Date(a.createdAt).getTime(),
+          audience: a.audience
+        }));
+        set({ notices: mappedNotices });
+      }
+    } catch (err) {
+      console.error('[CampusStore] Failed to fetch dashboard', err);
+    }
+  },
+
+  initRealTimeSync: (role, userId) => {
+    const socket = socketService.connect(role, userId);
+    
+    socket.on('announcement:new', (announcement) => {
+      console.log('[Socket] New announcement received!', announcement);
+      const newNotice: Notice = {
+        id: announcement.id,
+        by: announcement.author?.name || 'System',
+        title: announcement.title,
+        body: announcement.body,
+        at: new Date(announcement.createdAt).getTime(),
+        audience: announcement.audience
+      };
+      
+      set((s) => ({ notices: [newNotice, ...s.notices] }));
+      get().pushNotification({ title: `Notice: ${newNotice.title}`, body: newNotice.body, to: 'all', kind: 'notice' });
+    });
+
+    socket.on('approval:new', (approval) => {
+       console.log('[Socket] New approval pending!', approval);
+       // In a full implementation, you'd merge this into state.approvals
+       get().pushNotification({ title: `New Request`, body: approval.type, to: 'faculty', kind: 'approval' });
+    });
+
+    socket.on('approval:updated', (approval) => {
+       console.log('[Socket] Approval updated!', approval);
+       set((s) => ({
+         approvals: s.approvals.map(a => a.id === approval.id ? { ...a, status: approval.status } : a)
+       }));
+       get().pushNotification({ title: `Approval Updated`, body: `${approval.type} is now ${approval.status}`, to: 'all', kind: 'approval' });
+    });
+  },
+
+  stopRealTimeSync: () => {
+    socketService.disconnect();
+  }
 }));
 
 // ─── Derived Analytics ──────────────────────────────────────

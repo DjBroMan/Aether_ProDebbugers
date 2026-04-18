@@ -11,10 +11,10 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   
   const token = auth.split(' ')[1];
 
-  // Allow developer mock tokens to bypass proper JWT validation locally
-  // This enables the "Enter Developer Mode" button on the frontend to work end-to-end
   if (token === 'DEV_TOKEN' || token === 'MOCK' || token === 'MOCK_TOKEN') {
-    req.user = { id: 'dev123', name: 'Priyank (Dev)', email: 'dev@aether.com', role: 'STUDENT' };
+    const role = (req.headers['x-mock-role'] as string) || 'STUDENT';
+    console.log(`[AUTH] Mock login detected. Assigned role: ${role}`);
+    req.user = { id: 'demo-user', name: 'Demo User', email: 'demo@aether.com', role };
     return next();
   }
 
@@ -29,7 +29,9 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 
 export const requireRole = (...roles: string[]) =>
   (req: AuthRequest, res: Response, next: NextFunction) => {
+    console.log(`[AUTH] requireRole checking if user role ${req.user?.role} is in [${roles.join(', ')}]`);
     if (!req.user || !roles.includes(req.user.role)) {
+      console.log(`[AUTH] Forbidden!`);
       return res.status(403).json({ error: 'Forbidden' });
     }
     next();

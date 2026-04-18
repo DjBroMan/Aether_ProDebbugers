@@ -13,6 +13,8 @@ import aiRoutes from './routes/ai';
 import payRoutes from './routes/pay';
 import usersRoutes from './routes/users';
 import tasksRoutes from './routes/tasks';
+import dashboardRoutes from './routes/dashboard';
+import announcementsRoutes from './routes/announcements';
 
 const app = express();
 app.use(cors());
@@ -32,5 +34,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/pay', payRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/tasks', tasksRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/announcements', announcementsRoutes);
 
 export default app;
