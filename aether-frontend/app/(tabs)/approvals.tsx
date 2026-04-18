@@ -98,7 +98,7 @@ export default function ApprovalsScreen() {
 
   return (
     <View className="flex-1 bg-aether-bg">
-      <View className="pt-16 pb-4 px-6 border-b border-aether-border bg-aether-surface shadow-2xl">
+      <View className="pt-16 pb-4 px-6 border-b border-aether-border bg-aether-surface">
         <Text className="text-aether-text text-3xl font-bold">Chain of Responsibility</Text>
         <Text className="text-aether-muted text-sm tracking-wide mt-1">Multi-stage document clearance</Text>
       </View>
@@ -123,7 +123,7 @@ export default function ApprovalsScreen() {
             <MaterialCommunityIcons name="check-all" size={48} color="#34D399" />
             <Text className="text-aether-text font-bold text-lg mt-4">All Clear!</Text>
             <Text className="text-aether-muted text-center mt-2">
-              {isFaculty ? 'No pending approvals need your action.' : 'Tap "+ New Request" to submit a leave or certificate request.'}
+              {isFaculty ? 'No pending approvals need your action.' : 'Tap"+ New Request" to submit a leave or certificate request.'}
             </Text>
           </View>
         ) : (
@@ -131,7 +131,7 @@ export default function ApprovalsScreen() {
             <View key={item.id} className="bg-aether-surface p-5 rounded-2xl border border-aether-border mb-4">
               <View className="flex-row justify-between items-start mb-4">
                 <View className="flex-row gap-3 items-center">
-                  <View className="bg-aether-primary/20 p-2 rounded-lg">
+                  <View className="p-2 rounded-lg">
                     <MaterialCommunityIcons name="file-document" size={24} color="#38BDF8" />
                   </View>
                   <View>
@@ -161,7 +161,7 @@ export default function ApprovalsScreen() {
                 </View>
               ) : item.status === 'COMPLETED' && item.pdfUrl ? (
                 <TouchableOpacity 
-                  className="bg-aether-primary/10 border border-aether-primary p-4 rounded-xl flex-row justify-center items-center"
+                  className="border border-aether-primary p-4 rounded-xl flex-row justify-center items-center"
                   onPress={() => downloadPdf(item.pdfUrl)}
                   disabled={downloading}
                 >

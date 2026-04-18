@@ -15,6 +15,8 @@ export default function LandingScreen() {
     const { setUser, setLoading, isLoading } = useAuthStore();
     const [request, response, promptAsync] = Google.useAuthRequest({
         webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || 'dummy.apps.googleusercontent.com',
+        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || 'dummy-android.apps.googleusercontent.com',
+        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || 'dummy-ios.apps.googleusercontent.com',
     });
 
     useEffect(() => {

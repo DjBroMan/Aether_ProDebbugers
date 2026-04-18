@@ -48,7 +48,7 @@ export default function FinanceGateway() {
         <MaterialCommunityIcons name="arrow-left" size={24} color="#94A3B8" />
       </TouchableOpacity>
 
-      <View className="bg-aether-surface w-20 h-20 rounded-full items-center justify-center mb-6 shadow-lg shadow-aether-primary/20">
+      <View className="bg-aether-surface w-20 h-20 rounded-full items-center justify-center mb-6">
         <MaterialCommunityIcons name="bank" size={40} color="#38BDF8" />
       </View>
 
@@ -59,7 +59,7 @@ export default function FinanceGateway() {
       
       <View className="flex-row gap-4 mb-10">
         {[1, 2, 3, 4].map((i) => (
-          <View key={i} className={`w-6 h-6 rounded-full border-2 ${pin.length >= i ? 'bg-aether-primary border-aether-primary' : 'border-aether-muted'} shadow-md`} />
+          <View key={i} className={`w-6 h-6 rounded-full border-2 ${pin.length >= i ? 'bg-aether-primary border-aether-primary' : 'border-aether-muted'} `} />
         ))}
       </View>
 
@@ -67,7 +67,7 @@ export default function FinanceGateway() {
         {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map((keypad, idx) => (
           <TouchableOpacity 
             key={idx}
-            className={`w-[30%] h-16 justify-center items-center rounded-3xl mb-4 ${keypad ? 'bg-aether-surface active:bg-aether-primary/20 hover:bg-aether-primary/20' : ''}`}
+            className={`w-[30%] h-16 justify-center items-center rounded-3xl mb-4 ${keypad ? 'bg-aether-surface active:hover:' : ''}`}
             onPress={() => {
               if (keypad === 'del') handleDelete();
               else if (keypad) handleKeyPress(keypad);
@@ -84,7 +84,7 @@ export default function FinanceGateway() {
       </View>
 
       <TouchableOpacity 
-        className="w-full bg-aether-primary py-5 rounded-2xl items-center shadow-lg"
+        className="w-full bg-aether-primary py-5 rounded-2xl items-center"
         onPress={handlePayment}
         disabled={processing}
       >

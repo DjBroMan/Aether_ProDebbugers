@@ -12,11 +12,11 @@ export default function AdminDashboard() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const screenWidth = Dimensions.get('window').width;
+  console.log('[TRACE] AdminDashboard rendering. Loading:', loading);
 
   useEffect(() => {
+    console.log('[TRACE] AdminDashboard mounted.');
     if (user?.role === 'STUDENT') {
-      router.replace('/(tabs)');
       return;
     }
 
@@ -57,14 +57,14 @@ export default function AdminDashboard() {
 
   return (
     <ScrollView className="flex-1 bg-aether-bg">
-      <View className="pt-16 pb-6 px-6 border-b border-aether-border bg-aether-surface shadow-2xl">
+      <View className="pt-16 pb-6 px-6 border-b border-aether-border bg-aether-surface">
         <Text className="text-aether-text text-3xl font-bold">Admin Hive</Text>
         <Text className="text-aether-primary text-sm font-medium tracking-wide">Infrastructure & Traffic Heatmaps</Text>
       </View>
 
       <View className="p-6">
         <Text className="text-aether-text text-xl font-bold mb-4">Infrastructure Tickets Resolved</Text>
-        <View className="bg-aether-surface p-4 rounded-2xl border border-aether-border mb-8 shadow-sm">
+        <View className="bg-aether-surface p-4 rounded-2xl border border-aether-border mb-8">
           {loading ? (
              <ActivityIndicator color="#38BDF8" size="large" className="m-10" />
           ) : (
@@ -80,7 +80,7 @@ export default function AdminDashboard() {
         </View>
 
         <Text className="text-aether-text text-xl font-bold mb-4">Department Load Analytics</Text>
-        <View className="bg-aether-surface p-4 rounded-2xl border border-aether-border mb-8 shadow-sm">
+        <View className="bg-aether-surface p-4 rounded-2xl border border-aether-border mb-8">
           <BarChart
             data={{
               labels: ['CSE', 'ECE', 'MECH', 'BIO'],

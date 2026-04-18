@@ -74,7 +74,7 @@ export default function CopilotScreen() {
               {msg.isVoice ? '🎙️ ' : ''}{msg.text}
             </Text>
             {msg.source && (
-              <Text className="text-xs text-aether-muted mt-2 opacity-70">
+              <Text className="text-xs text-aether-muted mt-2">
                 Processed via: {msg.source}
               </Text>
             )}
@@ -100,7 +100,7 @@ export default function CopilotScreen() {
         
         {query.trim() === '' ? (
           <TouchableOpacity 
-            className={`w-14 h-14 rounded-full items-center justify-center shadow-lg ${recording ? 'bg-aether-danger' : 'bg-aether-surface border border-aether-border'}`}
+            className={`w-14 h-14 rounded-full items-center justify-center ${recording ? 'bg-aether-danger' : 'bg-aether-surface border border-aether-border'}`}
             onPressIn={startRecording}
             onPressOut={stopRecording}
             disabled={loading}
@@ -109,7 +109,7 @@ export default function CopilotScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity 
-            className="bg-aether-primary w-14 h-14 rounded-full items-center justify-center shadow-lg"
+            className="bg-aether-primary w-14 h-14 rounded-full items-center justify-center"
             onPress={() => handleSend()}
             disabled={loading}
           >

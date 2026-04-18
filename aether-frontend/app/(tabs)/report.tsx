@@ -68,7 +68,7 @@ export default function ReportScreen() {
 
   return (
     <View className="flex-1 bg-aether-bg">
-      <View className="pt-16 pb-4 px-6 border-b border-aether-border bg-aether-surface shadow-md">
+      <View className="pt-16 pb-4 px-6 border-b border-aether-border bg-aether-surface">
         <Text className="text-aether-text text-2xl font-bold">Resolution Protocol</Text>
         <Text className="text-aether-muted text-sm mt-1">Capture evidence of campus disruptions.</Text>
       </View>
@@ -88,7 +88,7 @@ export default function ReportScreen() {
               </TouchableOpacity>
               
               <TouchableOpacity 
-                className="flex-1 bg-aether-primary p-4 rounded-xl items-center flex-row justify-center shadow-lg"
+                className="flex-1 bg-aether-primary p-4 rounded-xl items-center flex-row justify-center"
                 onPress={submitReport}
                 disabled={uploading}
               >
@@ -108,7 +108,7 @@ export default function ReportScreen() {
             <CameraView style={StyleSheet.absoluteFillObject} facing="back" ref={cameraRef}>
               <View className="flex-1 bg-transparent flex-row justify-center items-end pb-8">
                 <TouchableOpacity 
-                  className="w-20 h-20 bg-white/30 rounded-full items-center justify-center border-4 border-white"
+                  className="w-20 h-20 rounded-full items-center justify-center border-4 border-white"
                   onPress={takePicture}
                 >
                   <View className="w-16 h-16 bg-white rounded-full" />

@@ -15,7 +15,9 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('[TRACE] DashboardScreen mounted. User:', user?.role);
     const fetchData = async () => {
+      console.log('[TRACE] Fetching data...');
       try {
         const [taskRes, eventRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/tasks`, { headers: { Authorization: `Bearer ${user?.token || 'DEV_TOKEN'}` } }),
@@ -26,6 +28,7 @@ export default function DashboardScreen() {
       } catch (err) {
         console.error('Data sync failed:', err);
       } finally {
+        console.log('[TRACE] Setting loading to false');
         setLoading(false);
       }
     };
@@ -34,6 +37,8 @@ export default function DashboardScreen() {
 
   const activeTasks = tasks.filter(t => t.status !== 'COMPLETED');
   const upNext = events.find(e => new Date(e.startTime) > new Date()) || events[0];
+
+  console.log('[TRACE] DashboardScreen rendering. loading:', loading, 'tasks:', activeTasks.length, 'upNext:', !!upNext);
 
   return (
     <ScrollView className="flex-1 bg-aether-bg p-6">
@@ -67,14 +72,14 @@ export default function DashboardScreen() {
       {/* Upcoming Class */}
       <Text className="text-aether-text text-xl font-bold mb-4">Up Next</Text>
       {upNext ? (
-        <View className="bg-gradient-to-r from-aether-primary to-aether-secondary p-5 rounded-2xl shadow-lg mb-8">
-          <View className="flex-row justify-between items-center bg-white/20 px-3 py-1 rounded-full self-start mb-4">
+        <View className="bg-aether-primary p-5 rounded-2xl mb-8">
+          <View className="flex-row justify-between items-center bg-aether-secondary px-3 py-1 rounded-full self-start mb-4">
             <Text className="text-white font-bold text-xs uppercase tracking-wider">
                {new Date(upNext.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
             </Text>
           </View>
           <Text className="text-white text-2xl font-bold">{upNext.title}</Text>
-          <View className="flex-row items-center mt-2 opacity-90">
+          <View className="flex-row items-center mt-2">
             <MaterialCommunityIcons name="map-marker" size={16} color="white" />
             <Text className="text-white ml-2 font-medium">{upNext.location}</Text>
           </View>
@@ -100,7 +105,7 @@ export default function DashboardScreen() {
 
 function QuickAction({ icon, label, color, onPress }: { icon: keyof typeof MaterialCommunityIcons.glyphMap, label: string, color: string, onPress: () => void }) {
   return (
-    <TouchableOpacity onPress={onPress} className="w-[47%] bg-aether-surface p-4 rounded-xl flex-row items-center border border-aether-border shadow-sm">
+    <TouchableOpacity onPress={onPress} className="w-[47%] bg-aether-surface p-4 rounded-xl flex-row items-center border border-aether-border">
       <View style={{ backgroundColor: `${color}20` }} className="p-3 rounded-full mr-3">
         <MaterialCommunityIcons name={icon} size={24} color={color} />
       </View>

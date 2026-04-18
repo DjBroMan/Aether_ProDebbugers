@@ -24,7 +24,7 @@ export default function ProfileScreen() {
               className="w-32 h-32 rounded-full border-4 border-aether-primary"
             />
           ) : (
-            <View className="w-32 h-32 rounded-full bg-aether-surface border-4 border-aether-primary items-center justify-center shadow-lg shadow-aether-primary/20">
+            <View className="w-32 h-32 rounded-full bg-aether-surface border-4 border-aether-primary items-center justify-center">
               <MaterialCommunityIcons name="account" size={64} color="#38BDF8" />
             </View>
           )}
@@ -36,7 +36,7 @@ export default function ProfileScreen() {
         <Text className="text-aether-text text-3xl font-bold mb-1">{user?.name || 'Aether Engineer'}</Text>
         <Text className="text-aether-primary font-semibold uppercase tracking-widest">{user?.role || 'Developer Mode'}</Text>
         
-        <View className="w-full mt-12 bg-aether-surface rounded-3xl p-6 border border-aether-border shadow-md">
+        <View className="w-full mt-12 bg-aether-surface rounded-3xl p-6 border border-aether-border">
           
           <SettingItem icon="bell-ring-outline" title="Notifications" value="Enabled" />
           <View className="h-[1px] bg-aether-border my-4" />
