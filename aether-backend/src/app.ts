@@ -15,6 +15,7 @@ import usersRoutes from './routes/users';
 import tasksRoutes from './routes/tasks';
 import dashboardRoutes from './routes/dashboard';
 import announcementsRoutes from './routes/announcements';
+import notificationsRoutes from './routes/notifications';
 
 const app = express();
 app.use(cors());
@@ -36,5 +37,6 @@ app.use('/api/users', usersRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/announcements', announcementsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 export default app;

@@ -9,6 +9,7 @@ import {
 } from '../ui/AetherUI';
 import { useAuthStore } from '../../store/authStore';
 import { useCampusStore, type FacultyTier } from '../../store/campusStore';
+import { ReportIssueModal } from '../ui/ReportIssueModal';
 
 const tiers: { key: FacultyTier; icon: string }[] = [
   { key: 'Teacher', icon: 'school' },
@@ -37,6 +38,7 @@ export default function FacultyDashboard() {
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeBody, setNoticeBody] = useState('');
   const [noticeAudience, setNoticeAudience] = useState<'All' | 'CSE' | 'ECE' | 'MECH'>('CSE');
+  const [reportModalVisible, setReportModalVisible] = useState(false);
 
   const displayName = user?.name ?? 'Professor';
   const myQueue = approvals.filter((a) => {
@@ -99,8 +101,8 @@ export default function FacultyDashboard() {
       {/* Quick actions */}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
         <QuickTile icon="bell-plus" label="Notice" onPress={() => setNoticeOpen(true)} theme={theme} />
-        <QuickTile icon="checkbox-marked" label="Attendance" onPress={() => {}} theme={theme} />
         <QuickTile icon="clipboard-check" label="Requests" onPress={() => router.push('/(tabs)/approvals')} theme={theme} />
+        <QuickTile icon="alert-outline" label="Report Issue" onPress={() => setReportModalVisible(true)} theme={theme} />
         <QuickTile icon="chart-bar" label="Insights" onPress={() => {}} theme={theme} />
       </View>
 
@@ -205,6 +207,8 @@ export default function FacultyDashboard() {
         </View>
         <GradientButton label="PUBLISH" onPress={handlePublishNotice} icon="send" />
       </BottomSheet>
+
+      <ReportIssueModal visible={reportModalVisible} onClose={() => setReportModalVisible(false)} />
     </ScrollView>
   );
 }

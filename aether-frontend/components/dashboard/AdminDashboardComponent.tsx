@@ -161,6 +161,46 @@ export default function AdminDashboard() {
         ))}
       </GlassCard>
 
+      {/* Pending Issues */}
+      <GlassCard theme={theme} style={{ marginTop: 16 }}>
+        <SectionHeader icon="alert-outline" title="Pending Issues" trailing={{ text: 'All →', onPress: () => {} }} theme={theme} />
+        {tickets.filter(t => t.status !== 'Resolved' && t.status !== 'RESOLVED').length === 0 ? (
+          <Text style={{ fontSize: 12, color: theme.muted, textAlign: 'center', paddingVertical: 16 }}>No open issues.</Text>
+        ) : (
+          <View style={{ gap: 8 }}>
+            {tickets.filter(t => t.status !== 'Resolved' && t.status !== 'RESOLVED').slice(0, 5).map((t) => (
+              <View key={t.id} style={[sty.permItem, { backgroundColor: theme.secondary }]}>
+                <GradientIconCircle icon="wrench" size={36} iconSize={16} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground }}>{t.title}</Text>
+                  <Text style={{ fontSize: 11, color: theme.muted }}>{t.location} · {t.priority} Priority</Text>
+                </View>
+                <TouchableOpacity 
+                  onPress={async () => {
+                    try {
+                      const axios = require('axios').default;
+                      const { API_BASE_URL } = require('../../constants/api');
+                      await axios.patch(`${API_BASE_URL}/api/tickets/${t.id}/resolve`, {}, {
+                        headers: { Authorization: `Bearer ${user?.token}` }
+                      });
+                      store.updateTicketStatus(t.id, 'Resolved');
+                    } catch (e) {
+                      console.error('Failed to resolve issue', e);
+                    }
+                  }} 
+                  style={{
+                    paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8,
+                    backgroundColor: 'rgba(16,185,129,0.15)',
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>RESOLVE</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+      </GlassCard>
+
       {/* Create Account */}
       <GlassCard theme={theme} style={{ marginTop: 16 }}>
         <SectionHeader icon="account-plus" title="Create Account" theme={theme} />

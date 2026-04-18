@@ -15,10 +15,11 @@ model User {
   avatar    String?  // Cloudinary URL
   createdAt DateTime @default(now())
 
-  tickets   Ticket[]      @relation("UserTickets")
-  tasks     Task[]        @relation("UserTasks")
-  approvals Approval[]    @relation("UserApprovals")
+  tickets       Ticket[]       @relation("UserTickets")
+  tasks         Task[]         @relation("UserTasks")
+  approvals     Approval[]     @relation("UserApprovals")
   announcements Announcement[] @relation("UserAnnouncements")
+  notifications Notification[] @relation("UserNotifications")
 }
 
 enum Role {
@@ -35,6 +36,7 @@ model Ticket {
   description String
   imageUrl    String?  // Cloudinary high-res proof
   status      String   @default("OPEN")
+  location    String?  // Added for Issue Reporting
   latitude    Float?
   longitude   Float?
   authorId    String
@@ -80,5 +82,15 @@ model Announcement {
   authorId    String
   author      User     @relation("UserAnnouncements", fields: [authorId], references: [id])
   createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  message   String
+  type      String   // 'APPROVAL', 'REJECTION', 'ANNOUNCEMENT', 'TICKET_RESOLVED'
+  isRead    Boolean  @default(false)
+  userId    String
+  user      User     @relation("UserNotifications", fields: [userId], references: [id])
+  createdAt DateTime @default(now())
 }
 

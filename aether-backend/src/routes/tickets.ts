@@ -45,6 +45,7 @@ router.post('/', upload.single('image'), async (req: AuthRequest, res) => {
       title,
       description,
       imageUrl,
+      location: req.body.location, // Added string location field
       authorId: req.user!.id,
       latitude: latitude ? parseFloat(latitude) : undefined,
       longitude: longitude ? parseFloat(longitude) : undefined,
@@ -65,6 +66,18 @@ router.patch('/:id', async (req: AuthRequest, res) => {
     data: { status },
     include: { author: { select: { name: true, email: true } } },
   });
+  
+  if (status === 'RESOLVED') {
+    const notification = await prisma.notification.create({
+      data: {
+        userId: ticket.authorId,
+        message: `Your reported issue "${ticket.title}" has been resolved`,
+        type: 'TICKET_RESOLVED',
+      }
+    });
+    io.to(`user:${ticket.authorId}`).emit('notification:new', notification);
+  }
+
   io.emit('ticket:updated', ticket);
   res.json(ticket);
 });

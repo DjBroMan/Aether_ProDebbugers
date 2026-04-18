@@ -98,6 +98,15 @@ router.patch('/:id/advance', async (req: AuthRequest, res) => {
     include: { requester: { select: { name: true, email: true } } },
   });
 
+  const notification = await prisma.notification.create({
+    data: {
+      userId: updated.requesterId,
+      message: nextStatus === 'COMPLETED' ? `Your ${updated.type} request was approved!` : `Your ${updated.type} request advanced to ${nextStatus}`,
+      type: 'APPROVAL',
+    }
+  });
+
+  io.to(`user:${updated.requesterId}`).emit('notification:new', notification);
   // Real-time push to ALL clients — student sees status change instantly
   io.emit('approval:updated', updated);
   res.json(updated);
@@ -110,6 +119,16 @@ router.patch('/:id/reject', async (req: AuthRequest, res) => {
     data: { status: 'REJECTED' },
     include: { requester: { select: { name: true, email: true } } },
   });
+
+  const notification = await prisma.notification.create({
+    data: {
+      userId: updated.requesterId,
+      message: `Your ${updated.type} request was rejected`,
+      type: 'REJECTION',
+    }
+  });
+
+  io.to(`user:${updated.requesterId}`).emit('notification:new', notification);
   io.emit('approval:updated', updated);
   res.json(updated);
 });

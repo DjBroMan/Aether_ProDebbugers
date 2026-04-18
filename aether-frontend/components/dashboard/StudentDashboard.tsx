@@ -10,6 +10,8 @@ import {
 } from '../ui/AetherUI';
 import { useAuthStore } from '../../store/authStore';
 import { useCampusStore } from '../../store/campusStore';
+import { ReportIssueModal } from '../ui/ReportIssueModal';
+import { useState } from 'react';
 
 const classes = [
   { time: '09:00', name: 'Calculus II', room: 'B-201' },
@@ -25,6 +27,8 @@ export default function StudentDashboard() {
   const displayName = user?.name ?? 'Student';
   const initial = displayName[0]?.toUpperCase() ?? 'S';
   const unread = notifications.some((n) => !n.read);
+  
+  const [reportModalVisible, setReportModalVisible] = useState(false);
 
   return (
     <ScrollView
@@ -79,7 +83,7 @@ export default function StudentDashboard() {
       {/* Quick actions */}
       <View style={styles.quickRow}>
         <QuickTile icon="file-document-outline" label="Approvals" onPress={() => router.push('/(tabs)/approvals')} theme={theme} />
-        <QuickTile icon="alert-outline" label="Issues" onPress={() => router.push('/(tabs)/report')} theme={theme} />
+        <QuickTile icon="alert-outline" label="Report Issue" onPress={() => setReportModalVisible(true)} theme={theme} />
         <QuickTile icon="credit-card-outline" label="Pay Dues" onPress={() => {}} theme={theme} />
         <QuickTile icon="apps" label="Super App" onPress={() => router.push('/(tabs)/explore')} theme={theme} />
       </View>
@@ -151,6 +155,8 @@ export default function StudentDashboard() {
           </View>
         ))}
       </GlassCard>
+      
+      <ReportIssueModal visible={reportModalVisible} onClose={() => setReportModalVisible(false)} />
     </ScrollView>
   );
 }

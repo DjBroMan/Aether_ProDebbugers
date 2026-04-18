@@ -4,6 +4,7 @@
  * into Zustand for React Native compatibility.
  */
 import { create } from 'zustand';
+import { useAuthStore } from './authStore';
 
 // ─── Types ──────────────────────────────────────────────────
 export type FacultyTier = 'Teacher' | 'HOD' | 'Principal';
@@ -155,16 +156,18 @@ interface CampusState {
   payments: Payment[];
   notices: Notice[];
   notifications: CampusNotification[];
+  activePopup: CampusNotification | null;
   miniApps: MiniApp[];
 
   // Actions
-  createApproval: (input: { title: string; kind: ApprovalKind; by: string; details?: Record<string, string> }) => string;
-  actOnApproval: (approvalId: string, action: 'approve' | 'reject', actor: FacultyTier, note?: string) => void;
+  createApproval: (input: { title: string; kind: ApprovalKind; by: string; details?: Record<string, string> }) => Promise<string>;
+  actOnApproval: (approvalId: string, action: 'approve' | 'reject', actor: FacultyTier, note?: string) => Promise<void>;
   createTicket: (input: { title: string; location: string; category: Ticket['category']; by: string; photos: string[] }) => string;
   updateTicketStatus: (id: string, status: Ticket['status']) => void;
   createPayment: (input: { amount: number; method: Payment['method']; items: Payment['items'] }) => Payment;
   createNotice: (input: { title: string; body: string; audience: Notice['audience']; by: string }) => void;
   pushNotification: (input: { title: string; body: string; to: string; kind: CampusNotification['kind'] }) => void;
+  setActivePopup: (n: CampusNotification | null) => void;
   markAllRead: () => void;
   addScheduleEvent: (input: Omit<ScheduleEvent, 'id'>) => ScheduleEvent;
   // Backend Integration
@@ -227,11 +230,8 @@ export const useCampusStore = create<CampusState>((set, get) => ({
   notices: [
     { id: uid(), by: 'Prof. M. Rao', title: 'Mid-sem schedule released', body: 'Check the academic portal for the full schedule.', at: now() - 7200_000, audience: 'CSE' },
   ],
-  notifications: [
-    { id: uid(), title: 'Assignment due tomorrow', body: 'Quantum Physics · 11:59 PM', at: now() - 7200_000, to: 'priyank.s', kind: 'schedule', read: false },
-    { id: uid(), title: 'Leave request approved', body: 'Apr 16 · HOD signed', at: now() - 18000_000, to: 'priyank.s', kind: 'approval', read: false },
-    { id: uid(), title: 'Lab venue changed', body: 'Now Lab-3 · was Lab-1', at: now() - 86_400_000, to: 'all', kind: 'schedule', read: true },
-  ],
+  notifications: [],
+  activePopup: null,
   miniApps: [
     { id: 'canteen', name: 'Canteen Tracker', description: 'Live menu, queue & pre-order.', icon: 'coffee', installed: false, permissions: ['wallet:read'] },
     { id: 'research', name: 'Research Portal', description: 'Browse & submit papers.', icon: 'flask-conical', installed: true, permissions: ['profile:read'] },
@@ -242,47 +242,47 @@ export const useCampusStore = create<CampusState>((set, get) => ({
   ],
 
   // ─── Actions ────────────────────────────────────────────
-  createApproval: (input) => {
-    const id = uid();
-    const a: Approval = {
-      id,
-      title: input.title,
-      kind: input.kind,
-      by: input.by,
-      createdAt: now(),
-      status: 'Pending',
-      chain: defaultChain(input.kind),
-      details: input.details,
-    };
-    set((s) => ({ approvals: [a, ...s.approvals] }));
-    get().pushNotification({ title: `Request submitted: ${input.title}`, body: `Routed to ${a.chain[1]?.by ?? 'approver'}`, to: input.by, kind: 'approval' });
-    return id;
+  createApproval: async (input) => {
+    try {
+      const { user } = useAuthStore.getState();
+      const res = await axios.post(`${API_BASE_URL}/api/approvals`, {
+        type: input.kind,
+        content: JSON.stringify(input.details || { reason: input.title })
+      }, {
+        headers: { Authorization: `Bearer ${user?.token}`, 'x-mock-role': user?.role }
+      });
+      // Immediately add to local state so the student sees it without waiting for socket
+      const a = res.data;
+      let chain = defaultChain(a.type as ApprovalKind);
+      chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'current' } : c);
+      const frontendApproval: Approval = {
+        id: a.id,
+        title: `${a.type} Request`,
+        kind: a.type as ApprovalKind,
+        by: a.requester?.name || user?.name || 'Student',
+        createdAt: new Date(a.createdAt).getTime(),
+        status: 'Pending',
+        chain: chain,
+        details: { details: a.content }
+      };
+      set((s) => ({ approvals: [frontendApproval, ...s.approvals] }));
+      return res.data.id;
+    } catch (err) {
+      console.error('[CampusStore] Failed to create approval', err);
+      return '';
+    }
   },
 
-  actOnApproval: (approvalId, action, actor, note) => {
-    set((s) => ({
-      approvals: s.approvals.map((a) => {
-        if (a.id !== approvalId) return a;
-        const idx = a.chain.findIndex((c) => c.status === 'current');
-        if (idx === -1) return a;
-        const newChain = a.chain.slice();
-        const stage = newChain[idx];
-        if (stage.by !== actor && stage.by !== 'Office') return a;
-        newChain[idx] = { ...stage, status: action === 'approve' ? 'done' : 'rejected', at: fmt(now()), note };
-        let status: Approval['status'] = a.status;
-        if (action === 'reject') {
-          status = 'Rejected';
-        } else {
-          const next = newChain[idx + 1];
-          if (next) { newChain[idx + 1] = { ...next, status: 'current' }; status = 'In Review'; }
-          else { status = 'Approved'; }
-        }
-        return { ...a, chain: newChain, status };
-      }),
-    }));
-    const updated = get().approvals.find((a) => a.id === approvalId);
-    if (updated) {
-      get().pushNotification({ title: `${updated.title} · ${updated.status}`, body: action === 'approve' ? `Cleared by ${actor}` : `Rejected by ${actor}`, to: updated.by, kind: 'approval' });
+  actOnApproval: async (approvalId, action, actor, note) => {
+    try {
+      const endpoint = action === 'approve' ? `/api/approvals/${approvalId}/advance` : `/api/approvals/${approvalId}/reject`;
+      const { user } = useAuthStore.getState();
+      await axios.patch(`${API_BASE_URL}${endpoint}`, { note }, {
+        headers: { Authorization: `Bearer ${user?.token}`, 'x-mock-role': user?.role }
+      });
+      // Socket listeners 'approval:updated' and 'notification:new' handle the rest.
+    } catch (err) {
+      console.error('[CampusStore] Failed to act on approval', err);
     }
   },
 
@@ -315,8 +315,10 @@ export const useCampusStore = create<CampusState>((set, get) => ({
 
   pushNotification: (input) => {
     const n: CampusNotification = { ...input, id: uid(), at: now(), read: false };
-    set((s) => ({ notifications: [n, ...s.notifications].slice(0, 30) }));
+    set((s) => ({ notifications: [n, ...s.notifications].slice(0, 30), activePopup: n }));
   },
+
+  setActivePopup: (n) => set({ activePopup: n }),
 
   markAllRead: () => {
     set((s) => ({ notifications: s.notifications.map((n) => ({ ...n, read: true })) }));
@@ -356,6 +358,106 @@ export const useCampusStore = create<CampusState>((set, get) => ({
         }));
         set({ notices: mappedNotices });
       }
+
+      // Also fetch notifications
+      const notifRes = await axios.get(`${API_BASE_URL}/api/notifications`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-mock-role': role }
+      });
+      if (notifRes.data) {
+        const mappedNotifs = notifRes.data.map((n: any) => ({
+          id: n.id,
+          title: n.type,
+          body: n.message,
+          at: new Date(n.createdAt).getTime(),
+          to: 'me',
+          kind: n.type === 'TICKET_RESOLVED' ? 'ticket' : 'approval',
+          read: n.isRead
+        }));
+        set({ notifications: mappedNotifs });
+      }
+
+      // Also fetch tickets
+      const ticketRes = await axios.get(`${API_BASE_URL}/api/tickets`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-mock-role': role }
+      });
+      if (ticketRes.data) {
+        const mappedTickets = ticketRes.data.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          location: t.location || 'Campus',
+          category: 'IT',
+          priority: 'Medium',
+          status: t.status,
+          createdAt: new Date(t.createdAt).getTime(),
+          by: t.author?.name || 'User',
+          photos: t.imageUrl ? [t.imageUrl] : []
+        }));
+        set({ tickets: mappedTickets });
+        
+        // Push notification for Admin/HOD if there are open tickets
+        if (['ADMIN', 'HOD', 'PRINCIPAL'].includes(role)) {
+          const openCount = mappedTickets.filter((t: any) => t.status === 'OPEN' || t.status === 'Open').length;
+          if (openCount > 0) {
+             get().pushNotification({
+               title: 'Open Issues',
+               body: `You have ${openCount} open issue(s) requiring attention.`,
+               to: 'admin',
+               kind: 'ticket'
+             });
+          }
+        }
+      }
+
+      // Fetch approvals
+      const appRes = await axios.get(`${API_BASE_URL}/api/approvals`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-mock-role': role }
+      });
+      if (appRes.data) {
+        const mappedApprovals = appRes.data.map((a: any) => {
+          let chain = defaultChain(a.type as ApprovalKind);
+          // adjust chain status based on a.status
+          if (a.status === 'PENDING_HOD') {
+            chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'done' } : i === 2 ? { ...c, status: 'current' } : c);
+          } else if (a.status === 'PENDING_PRINCIPAL') {
+             chain = chain.map((c, i) => i <= 2 ? { ...c, status: 'done' } : i === 3 ? { ...c, status: 'current' } : c);
+          } else if (a.status === 'COMPLETED') {
+             chain = chain.map(c => ({ ...c, status: 'done' }));
+          } else if (a.status === 'REJECTED') {
+             chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : { ...c, status: 'rejected' });
+          } else { // PENDING_PROFESSOR
+             chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'current' } : c);
+          }
+          let frontendStatus: Approval['status'] = 'Pending';
+          if (a.status === 'COMPLETED') frontendStatus = 'Approved';
+          if (a.status === 'REJECTED') frontendStatus = 'Rejected';
+          if (a.status.startsWith('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
+          
+          return {
+            id: a.id,
+            title: `${a.type} Request`,
+            kind: a.type as ApprovalKind,
+            by: a.requester?.name || 'Student',
+            createdAt: new Date(a.createdAt).getTime(),
+            status: frontendStatus,
+            chain: chain,
+            details: { details: a.content }
+          };
+        });
+        set({ approvals: mappedApprovals });
+        
+        // Push notification for faculty if there are pending requests
+        if (role !== 'STUDENT') {
+          const pendingCount = mappedApprovals.filter((a: any) => a.status === 'Pending').length;
+          if (pendingCount > 0) {
+             get().pushNotification({
+               title: 'Pending Approvals',
+               body: `You have ${pendingCount} pending request(s) to review.`,
+               to: 'me',
+               kind: 'approval'
+             });
+          }
+        }
+      }
     } catch (err) {
       console.error('[CampusStore] Failed to fetch dashboard', err);
     }
@@ -379,19 +481,124 @@ export const useCampusStore = create<CampusState>((set, get) => ({
       get().pushNotification({ title: `Notice: ${newNotice.title}`, body: newNotice.body, to: 'all', kind: 'notice' });
     });
 
-    socket.on('approval:new', (approval) => {
-       console.log('[Socket] New approval pending!', approval);
-       // In a full implementation, you'd merge this into state.approvals
-       get().pushNotification({ title: `New Request`, body: approval.type, to: 'faculty', kind: 'approval' });
+    socket.on('approval:new', (a) => {
+       console.log('[Socket] New approval pending!', a);
+       let chain = defaultChain(a.type as ApprovalKind);
+       // adjust chain based on status (since it's new, it's PENDING_PROFESSOR)
+       chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'current' } : c);
+       const frontendApproval: Approval = {
+         id: a.id,
+         title: `${a.type} Request`,
+         kind: a.type as ApprovalKind,
+         by: a.requester?.name || 'Student',
+         createdAt: new Date(a.createdAt).getTime(),
+         status: 'In Review',
+         chain: chain,
+         details: { details: a.content }
+       };
+       set((s) => {
+         // Prevent duplicate key error if we already added it locally
+         if (s.approvals.some(existing => existing.id === a.id)) return s;
+         return { approvals: [frontendApproval, ...s.approvals] };
+       });
+       
+       // Only faculty should get a notification for this
+       const { user } = useAuthStore.getState();
+       if (user?.role !== 'STUDENT') {
+         get().pushNotification({ title: `New Request`, body: a.type, to: 'faculty', kind: 'approval' });
+       }
     });
 
-    socket.on('approval:updated', (approval) => {
-       console.log('[Socket] Approval updated!', approval);
+     socket.on('approval:updated', (a) => {
+        console.log('[Socket] Approval updated!', a);
+        let chain = defaultChain(a.type as ApprovalKind);
+        if (a.status === 'PENDING_HOD') {
+          chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'done' } : i === 2 ? { ...c, status: 'current' } : c);
+        } else if (a.status === 'PENDING_PRINCIPAL') {
+           chain = chain.map((c, i) => i <= 2 ? { ...c, status: 'done' } : i === 3 ? { ...c, status: 'current' } : c);
+        } else if (a.status === 'COMPLETED') {
+           chain = chain.map(c => ({ ...c, status: 'done' }));
+        } else if (a.status === 'REJECTED') {
+           chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : { ...c, status: 'rejected' });
+        } else {
+           chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'current' } : c);
+        }
+        let frontendStatus: Approval['status'] = 'Pending';
+        if (a.status === 'COMPLETED') frontendStatus = 'Approved';
+        if (a.status === 'REJECTED') frontendStatus = 'Rejected';
+        if (a.status.startsWith('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
+        
+        set((s) => ({
+          approvals: s.approvals.map(existing => existing.id === a.id ? { 
+            ...existing, 
+            status: frontendStatus,
+            chain: chain
+          } : existing)
+        }));
+     });
+
+     socket.on('notification:new', (notification) => {
+        console.log('[Socket] New DB Notification received!', notification);
+        // Build a user-friendly title
+        let friendlyTitle = 'Notification';
+        if (notification.type === 'APPROVAL') friendlyTitle = '✅ Request Update';
+        if (notification.type === 'REJECTION') friendlyTitle = '❌ Request Rejected';
+        if (notification.type === 'TICKET_RESOLVED') friendlyTitle = '🔧 Issue Resolved';
+        if (notification.type === 'ANNOUNCEMENT') friendlyTitle = '📢 Announcement';
+
+        const newNotif: CampusNotification = {
+          id: notification.id,
+          title: friendlyTitle,
+          body: notification.message,
+          at: new Date(notification.createdAt).getTime(),
+          to: 'me',
+          kind: notification.type === 'TICKET_RESOLVED' ? 'ticket' : 'approval',
+          read: false
+        };
+        set((s) => {
+          if (s.notifications.some(existing => existing.id === newNotif.id)) return s;
+          return {
+            notifications: [newNotif, ...s.notifications].slice(0, 30),
+            activePopup: newNotif
+          };
+        });
+     });
+
+     socket.on('ticket:new', (ticket) => {
+       console.log('[Socket] New Ticket!', ticket);
+       const t: Ticket = {
+          id: ticket.id,
+          title: ticket.title,
+          location: ticket.location || 'Campus',
+          category: 'IT',
+          priority: 'High',
+          status: ticket.status,
+          createdAt: new Date(ticket.createdAt).getTime(),
+          by: ticket.author?.name || 'User',
+          photos: ticket.imageUrl ? [ticket.imageUrl] : []
+       };
+       set((s) => {
+         if (s.tickets.some(existing => existing.id === t.id)) return s;
+         return { tickets: [t, ...s.tickets] };
+       });
+       
+       const { user } = useAuthStore.getState();
+       if (user && ['ADMIN', 'HOD', 'PRINCIPAL'].includes(user.role)) {
+         get().pushNotification({
+           title: '⚠️ New Issue Reported',
+           body: ticket.title,
+           to: 'admin',
+           kind: 'ticket'
+         });
+       }
+     });
+
+     socket.on('ticket:updated', (ticket) => {
+       console.log('[Socket] Ticket updated!', ticket);
        set((s) => ({
-         approvals: s.approvals.map(a => a.id === approval.id ? { ...a, status: approval.status } : a)
+         tickets: s.tickets.map(t => t.id === ticket.id ? { ...t, status: ticket.status } : t)
        }));
-       get().pushNotification({ title: `Approval Updated`, body: `${approval.type} is now ${approval.status}`, to: 'all', kind: 'approval' });
-    });
+     });
   },
 
   stopRealTimeSync: () => {

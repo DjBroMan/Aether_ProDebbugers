@@ -6,7 +6,8 @@ import { useAuthStore } from '../../store/authStore';
 import { useCampusStore } from '../../store/campusStore';
 import { useEffect } from 'react';
 import { CommonActions, useNavigation } from '@react-navigation/native';
-import { GRADIENT, useTheme } from '../../constants/designTokens';
+import { GRADIENT, useTheme, ThemeProvider } from '../../constants/designTokens';
+import { ToastNotification } from '../../components/ui/ToastNotification';
 
 export default function TabLayout() {
   const { user } = useAuthStore();
@@ -27,8 +28,10 @@ export default function TabLayout() {
   }, [user]);
 
   return (
-    <Tabs
-      screenOptions={{
+    <>
+      <ToastNotification />
+      <Tabs
+        screenOptions={{
         headerShown: false,
         tabBarStyle: {
           backgroundColor: theme.tabBar,
@@ -107,10 +110,10 @@ export default function TabLayout() {
           ),
         }}
       />
-      {/* Hidden screens */}
       <Tabs.Screen name="admin" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
+    </>
   );
 }
 

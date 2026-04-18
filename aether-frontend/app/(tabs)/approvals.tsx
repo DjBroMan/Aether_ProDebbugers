@@ -44,11 +44,11 @@ export default function ApprovalsScreen() {
     total: approvals.length,
   };
 
-  const handleCreate = () => {
-    const finalTitle = title.trim() || kind;
-    createApproval({ title: finalTitle, kind, by: user?.email ?? 'student', details: details.trim() ? { reason: details.trim() } : undefined });
-    setTitle(''); setDetails('');
+  const handleCreate = async () => {
     setCreating(false);
+    const finalTitle = title.trim() || kind;
+    await createApproval({ title: finalTitle, kind, by: user?.email ?? 'student', details: details.trim() ? { reason: details.trim() } : undefined });
+    setTitle(''); setDetails('');
   };
 
   return (
