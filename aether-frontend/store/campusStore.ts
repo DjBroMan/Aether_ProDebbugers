@@ -118,7 +118,7 @@ function defaultChain(kind: ApprovalKind): ApprovalStage[] {
         { label: 'Submitted', by: 'Student', status: 'done', at: t },
         { label: 'Faculty review', by: 'Teacher', status: 'current' },
         { label: 'HOD approval', by: 'HOD', status: 'pending' },
-        { label: 'Office issue', by: 'Office', status: 'pending' },
+        { label: 'Principal approval', by: 'Principal', status: 'pending' },
       ];
     case 'Room Booking':
       return [
@@ -130,7 +130,7 @@ function defaultChain(kind: ApprovalKind): ApprovalStage[] {
       return [
         { label: 'Submitted', by: 'Student', status: 'done', at: t },
         { label: 'Class Teacher', by: 'Teacher', status: 'current' },
-        { label: 'Office issue', by: 'Office', status: 'pending' },
+        { label: 'Principal approval', by: 'Principal', status: 'pending' },
       ];
     case 'Event':
       return [
@@ -190,6 +190,36 @@ interface CampusState {
 import axios from 'axios';
 import { API_BASE_URL } from '../constants/api';
 import { socketService } from '../services/socket';
+
+// Map backend status to the role that should be acting now
+const statusToRole: Record<string, FacultyTier | 'Office' | 'Student'> = {
+  'PENDING_PROFESSOR': 'Teacher',
+  'PENDING_HOD': 'HOD',
+  'PENDING_PRINCIPAL': 'Principal',
+};
+
+// Update chain stages based on backend status
+function updateChainByStatus(chain: ApprovalStage[], backendStatus: string): ApprovalStage[] {
+  if (backendStatus === 'COMPLETED') {
+    return chain.map(c => ({ ...c, status: 'done' as const }));
+  }
+  if (backendStatus === 'REJECTED') {
+    return chain.map((c, i) => i === 0 ? { ...c, status: 'done' as const } : { ...c, status: 'rejected' as const });
+  }
+
+  const currentRole = statusToRole[backendStatus];
+  if (!currentRole) return chain;
+
+  // Find the index of the current role in the chain
+  const currentIndex = chain.findIndex(c => c.by === currentRole);
+
+  // Mark all stages before current as done, current as current, rest as pending
+  return chain.map((c, i) => {
+    if (i < currentIndex) return { ...c, status: 'done' as const };
+    if (i === currentIndex) return { ...c, status: 'current' as const };
+    return { ...c, status: 'pending' as const };
+  });
+}
 
 export const useCampusStore = create<CampusState>((set, get) => ({
   approvals: [
@@ -479,11 +509,8 @@ export const useCampusStore = create<CampusState>((set, get) => ({
       if (Array.isArray(appRes.data) && appRes.data.length > 0) {
         const mapped = appRes.data.map((a: any) => {
           let chain = defaultChain((a.type || 'Leave') as ApprovalKind);
-          if (a.status === 'PENDING_HOD') chain = chain.map((c, i) => i <= 1 ? { ...c, status: 'done' as const } : i === 2 ? { ...c, status: 'current' as const } : c);
-          else if (a.status === 'PENDING_PRINCIPAL') chain = chain.map((c, i) => i <= 2 ? { ...c, status: 'done' as const } : i === 3 ? { ...c, status: 'current' as const } : c);
-          else if (a.status === 'COMPLETED') chain = chain.map(c => ({ ...c, status: 'done' as const }));
-          else if (a.status === 'REJECTED') chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' as const } : { ...c, status: 'rejected' as const });
-          else chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' as const } : i === 1 ? { ...c, status: 'current' as const } : c);
+          chain = updateChainByStatus(chain, a.status);
+
           let frontendStatus: Approval['status'] = 'Pending';
           if (a.status === 'COMPLETED') frontendStatus = 'Approved';
           if (a.status === 'REJECTED') frontendStatus = 'Rejected';
@@ -546,25 +573,16 @@ export const useCampusStore = create<CampusState>((set, get) => ({
      socket.on('approval:updated', (a) => {
         console.log('[Socket] Approval updated!', a);
         let chain = defaultChain(a.type as ApprovalKind);
-        if (a.status === 'PENDING_HOD') {
-          chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'done' } : i === 2 ? { ...c, status: 'current' } : c);
-        } else if (a.status === 'PENDING_PRINCIPAL') {
-           chain = chain.map((c, i) => i <= 2 ? { ...c, status: 'done' } : i === 3 ? { ...c, status: 'current' } : c);
-        } else if (a.status === 'COMPLETED') {
-           chain = chain.map(c => ({ ...c, status: 'done' }));
-        } else if (a.status === 'REJECTED') {
-           chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : { ...c, status: 'rejected' });
-        } else {
-           chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'current' } : c);
-        }
+        chain = updateChainByStatus(chain, a.status);
+
         let frontendStatus: Approval['status'] = 'Pending';
         if (a.status === 'COMPLETED') frontendStatus = 'Approved';
         if (a.status === 'REJECTED') frontendStatus = 'Rejected';
         if (a.status && a.status.startsWith('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
-        
+
         set((s) => ({
-          approvals: s.approvals.map(existing => existing.id === a.id ? { 
-            ...existing, 
+          approvals: s.approvals.map(existing => existing.id === a.id ? {
+            ...existing,
             status: frontendStatus,
             chain: chain
           } : existing)
