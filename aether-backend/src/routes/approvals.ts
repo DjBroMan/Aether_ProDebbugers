@@ -72,9 +72,18 @@ router.post('/', requireRole('STUDENT'), async (req: AuthRequest, res) => {
 // ───────────────────────────────────────────────────────────────
 router.patch('/:id/advance', async (req: AuthRequest, res) => {
   const { role } = req.user!;
+  const { actor } = req.body;
   const approvalId = req.params.id as string;
   const approval = await prisma.approval.findUnique({ where: { id: approvalId } });
   if (!approval) return res.status(404).json({ error: 'Not found' });
+
+  // Map frontend tier to backend role
+  const tierToRole: Record<string, string> = {
+    'Teacher': 'PROFESSOR',
+    'HOD': 'HOD',
+    'Principal': 'PRINCIPAL',
+  };
+  const actingRole = actor ? tierToRole[actor] : role;
 
   // Validate: this role can only advance from its designated stage
   const ALLOWED: Record<string, string> = {
@@ -88,13 +97,13 @@ router.patch('/:id/advance', async (req: AuthRequest, res) => {
     PRINCIPAL: 'COMPLETED',
   };
 
-  if (!ALLOWED[role] || approval.status !== ALLOWED[role]) {
+  if (!ALLOWED[actingRole] || approval.status !== ALLOWED[actingRole]) {
     return res.status(403).json({
-      error: `Cannot advance: you are ${role}, but approval is at ${approval.status}`,
+      error: `Cannot advance: you are ${actingRole}, but approval is at ${approval.status}`,
     });
   }
 
-  const nextStatus = NEXT[role];
+  const nextStatus = NEXT[actingRole];
   let pdfUrl = approval.pdfUrl;
 
   // When PRINCIPAL approves → chain complete → generate PDF certificate
@@ -161,7 +170,7 @@ router.patch('/:id/advance', async (req: AuthRequest, res) => {
   } catch (e) { /* non-blocking */ }
 
   io.emit('approval:updated', updated);
-  console.log(`[Approval] ADVANCED: ${updated.type} → ${nextStatus} by ${role}`);
+  console.log(`[Approval] ADVANCED: ${updated.type} → ${nextStatus} by ${actingRole}`);
   res.json(updated);
 });
 
@@ -170,9 +179,18 @@ router.patch('/:id/advance', async (req: AuthRequest, res) => {
 // ───────────────────────────────────────────────────────────────
 router.patch('/:id/reject', async (req: AuthRequest, res) => {
   const { role } = req.user!;
+  const { actor } = req.body;
   const approvalId = req.params.id as string;
   const approval = await prisma.approval.findUnique({ where: { id: approvalId } });
   if (!approval) return res.status(404).json({ error: 'Not found' });
+
+  // Map frontend tier to backend role
+  const tierToRole: Record<string, string> = {
+    'Teacher': 'PROFESSOR',
+    'HOD': 'HOD',
+    'Principal': 'PRINCIPAL',
+  };
+  const actingRole = actor ? tierToRole[actor] : role;
 
   // Only the role whose turn it is can reject
   const ALLOWED: Record<string, string> = {
@@ -180,8 +198,8 @@ router.patch('/:id/reject', async (req: AuthRequest, res) => {
     HOD: 'PENDING_HOD',
     PRINCIPAL: 'PENDING_PRINCIPAL',
   };
-  if (!ALLOWED[role] || approval.status !== ALLOWED[role]) {
-    return res.status(403).json({ error: `Cannot reject: not your turn (${role} vs ${approval.status})` });
+  if (!ALLOWED[actingRole] || approval.status !== ALLOWED[actingRole]) {
+    return res.status(403).json({ error: `Cannot reject: not your turn (${actingRole} vs ${approval.status})` });
   }
 
   const updated = await prisma.approval.update({
@@ -194,14 +212,14 @@ router.patch('/:id/reject', async (req: AuthRequest, res) => {
     await prisma.notification.create({
       data: {
         userId: updated.requesterId,
-        message: `Your ${updated.type} request was rejected by ${role.toLowerCase()}.`,
+        message: `Your ${updated.type} request was rejected by ${actingRole.toLowerCase()}.`,
         type: 'REJECTION',
       },
     });
   } catch (e) { /* non-blocking */ }
 
   io.emit('approval:updated', updated);
-  console.log(`[Approval] REJECTED: ${updated.type} by ${role}`);
+  console.log(`[Approval] REJECTED: ${updated.type} by ${actingRole}`);
   res.json(updated);
 });
 

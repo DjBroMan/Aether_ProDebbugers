@@ -96,7 +96,13 @@ export type MiniApp = {
 };
 
 // ─── Helpers ────────────────────────────────────────────────
-const uid = () => Math.random().toString(36).slice(2, 9);
+const uid = () => {
+  // Generate unique ID combining timestamp + random to prevent collisions
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).slice(2, 9);
+  const counter = Math.floor(Math.random() * 1000000).toString(36);
+  return `${timestamp}-${counter}-${randomPart}`;
+};
 const now = () => Date.now();
 const fmt = (t: number) => {
   const d = new Date(t);
@@ -281,7 +287,7 @@ export const useCampusStore = create<CampusState>((set, get) => ({
     try {
       const endpoint = action === 'approve' ? `/api/approvals/${approvalId}/advance` : `/api/approvals/${approvalId}/reject`;
       const { user } = useAuthStore.getState();
-      await axios.patch(`${API_BASE_URL}${endpoint}`, { note }, {
+      await axios.patch(`${API_BASE_URL}${endpoint}`, { note, actor }, {
         headers: { Authorization: `Bearer ${user?.token}`, 'x-mock-role': user?.role }
       });
       // Socket listeners 'approval:updated' and 'notification:new' handle the rest.
@@ -456,7 +462,7 @@ export const useCampusStore = create<CampusState>((set, get) => ({
           let frontendStatus: Approval['status'] = 'Pending';
           if (a.status === 'COMPLETED') frontendStatus = 'Approved';
           if (a.status === 'REJECTED') frontendStatus = 'Rejected';
-          if (a.status?.startsWith?.('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
+          if (a.status && typeof a.status === 'string' && a.status.startsWith('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
           return { id: a.id, title: `${a.type} Request`, kind: (a.type || 'Leave') as ApprovalKind,
             by: a.requester?.name || 'Student', createdAt: new Date(a.createdAt).getTime(),
             status: frontendStatus, chain, details: a.content ? { details: a.content } : undefined };
@@ -529,7 +535,7 @@ export const useCampusStore = create<CampusState>((set, get) => ({
         let frontendStatus: Approval['status'] = 'Pending';
         if (a.status === 'COMPLETED') frontendStatus = 'Approved';
         if (a.status === 'REJECTED') frontendStatus = 'Rejected';
-        if (a.status.startsWith('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
+        if (a.status && a.status.startsWith('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
         
         set((s) => ({
           approvals: s.approvals.map(existing => existing.id === a.id ? { 

@@ -121,7 +121,6 @@ export default function StudentDashboard() {
               <Text style={{ fontSize: 12, color: theme.muted }}>A-104</Text>
             </View>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={theme.muted} />
         </View>
       </GlassCard>
 
@@ -139,7 +138,6 @@ export default function StudentDashboard() {
                   <Text style={{ fontSize: 11, color: theme.muted }}>{c.room} · {c.time}</Text>
                 </View>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={theme.muted} />
             </View>
           ))}
         </View>

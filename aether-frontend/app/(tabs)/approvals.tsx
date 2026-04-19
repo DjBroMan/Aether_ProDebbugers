@@ -34,6 +34,7 @@ export default function ApprovalsScreen() {
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
   const [actorTier, setActorTier] = useState<FacultyTier>('Teacher');
+  const [viewingTimeline, setViewingTimeline] = useState<Approval | null>(null);
 
   const filtered = tab === 'All' ? approvals :
     approvals.filter((a) => tab === 'Pending' ? (a.status === 'Pending' || a.status === 'In Review') : a.status === tab);
@@ -145,7 +146,7 @@ export default function ApprovalsScreen() {
                     </>
                   )}
                   {!canAct && (
-                    <TouchableOpacity style={[s.actionBtn, { flex: 1, backgroundColor: theme.secondary }]}>
+                    <TouchableOpacity onPress={() => setViewingTimeline(it)} style={[s.actionBtn, { flex: 1, backgroundColor: theme.secondary }]}>
                       <Text style={{ fontSize: 12, fontWeight: '700', color: theme.muted }}>View timeline</Text>
                       <MaterialCommunityIcons name="chevron-right" size={14} color={theme.muted} />
                     </TouchableOpacity>
@@ -181,6 +182,53 @@ export default function ApprovalsScreen() {
         <TextInput value={details} onChangeText={setDetails} placeholder="Brief context (optional)" placeholderTextColor={theme.muted} multiline numberOfLines={3}
           style={{ backgroundColor: theme.inputBg, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.foreground, marginBottom: 16, textAlignVertical: 'top', minHeight: 80 }} />
         <GradientButton label="SUBMIT TO CHAIN" onPress={handleCreate} icon="send" />
+      </BottomSheet>
+
+      {/* Timeline modal */}
+      <BottomSheet visible={!!viewingTimeline} onClose={() => setViewingTimeline(null)} theme={theme}>
+        {viewingTimeline && (
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+              <View>
+                <Text style={[FONT.tiny, { color: theme.muted }]}>REQUEST TIMELINE</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: theme.foreground }}>{viewingTimeline.title}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setViewingTimeline(null)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.secondary, alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialCommunityIcons name="close" size={16} color={theme.foreground} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {viewingTimeline.chain.map((stage, idx) => {
+                const isLast = idx === viewingTimeline.chain.length - 1;
+                const statusIcon = stage.status === 'done' ? 'check-circle' : stage.status === 'current' ? 'clock-outline' : stage.status === 'rejected' ? 'close-circle' : 'circle-outline';
+                const statusColor = stage.status === 'done' ? theme.primary : stage.status === 'current' ? GRADIENT.start : stage.status === 'rejected' ? theme.destructive : theme.muted;
+                
+                return (
+                  <View key={idx} style={{ flexDirection: 'row', marginBottom: isLast ? 0 : 20 }}>
+                    <View style={{ alignItems: 'center', marginRight: 12 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: `${statusColor}20`, alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialCommunityIcons name={statusIcon as any} size={16} color={statusColor} />
+                      </View>
+                      {!isLast && <View style={{ width: 2, height: 32, backgroundColor: `${statusColor}40`, marginTop: 8 }} />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.foreground }}>{stage.label}</Text>
+                      <Text style={{ fontSize: 11, color: theme.muted, marginTop: 2 }}>Awaits {stage.by}</Text>
+                      {stage.at && (
+                        <Text style={{ fontSize: 10, color: theme.muted, marginTop: 4 }}>{stage.at}</Text>
+                      )}
+                      {stage.note && (
+                        <View style={{ backgroundColor: theme.card, borderRadius: 8, padding: 8, marginTop: 8, borderLeftWidth: 3, borderLeftColor: statusColor }}>
+                          <Text style={{ fontSize: 11, color: theme.foreground, fontStyle: 'italic' }}>"{stage.note}"</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
       </BottomSheet>
     </View>
   );
