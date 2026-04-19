@@ -79,10 +79,11 @@ export default function ScheduleScreen() {
           ))}
           {events.map((e) => {
             const isClash = clashes.has(e.id);
+            const isPending = e.status === 'pending';
             return (
-              <View key={e.id} style={[s.eventBlock, { top: (e.startHour - 8 + 1) * 56 - 4, height: e.span * 56 - 8, left: 50, right: 8 }]}>
+              <View key={e.id} style={[s.eventBlock, { top: (e.startHour - 8 + 1) * 56 - 4, height: e.span * 56 - 8, left: 50, right: 8, opacity: isPending ? 0.6 : 1 }]}>
                 <LinearGradient
-                  colors={isClash ? ['#EC4899', '#EF4444'] : ['#5B7FFF', '#8B5CF6', '#EC4899']}
+                  colors={isPending ? ['#CCCCCC', '#AAAAAA'] : isClash ? ['#EC4899', '#EF4444'] : ['#5B7FFF', '#8B5CF6', '#EC4899']}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject}
                 />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -93,7 +94,12 @@ export default function ScheduleScreen() {
                       <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>{e.room}</Text>
                     </View>
                   </View>
-                  {isClash && (
+                  {isPending && (
+                    <View style={{ backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 }}>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#FFF' }}>PENDING</Text>
+                    </View>
+                  )}
+                  {isClash && !isPending && (
                     <View style={{ backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 }}>
                       <Text style={{ fontSize: 9, fontWeight: '700', color: '#FFF' }}>CLASH</Text>
                     </View>
@@ -156,10 +162,38 @@ function NewEventModal({ day, onClose }: { day: number; onClose: () => void }) {
   const [room, setRoom] = useState('A-104');
   const [startHour, setStartHour] = useState(14);
   const [span, setSpan] = useState(1);
-  const { addScheduleEvent, suggestFreeSlot } = useCampusStore();
+  const { addScheduleEvent, suggestFreeSlot, schedule } = useCampusStore();
+
+  // Find booked times for the selected room on this day
+  const approvedHours = new Set<number>();
+  const pendingHours = new Set<number>();
+  
+  const filteredEvents = schedule.filter((e) => e.day === day && e.room === room);
+  
+  filteredEvents.forEach((e) => {
+    for (let i = e.startHour; i < e.startHour + e.span; i++) {
+      if (e.status === 'approved') {
+        approvedHours.add(i);
+      } else if (e.status === 'pending') {
+        pendingHours.add(i);
+      }
+    }
+  });
+
+  const bookedHours = new Set([...approvedHours, ...pendingHours]);
+
+  // Check if a time slot with span would conflict
+  const isTimeAvailable = (hour: number, duration: number) => {
+    for (let i = hour; i < hour + duration; i++) {
+      if (bookedHours.has(i)) return false;
+    }
+    return true;
+  };
+
+  const canSelectTime = isTimeAvailable(startHour, span);
 
   const submit = () => {
-    if (!title.trim()) return;
+    if (!title.trim() || !canSelectTime) return;
     addScheduleEvent({ title: title.trim(), room, day, startHour, span, kind: 'event' });
     onClose();
   };
@@ -200,19 +234,37 @@ function NewEventModal({ day, onClose }: { day: number; onClose: () => void }) {
 
         <View style={{ marginBottom: 12 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-            {hours.map((h) => (
-              <TouchableOpacity key={h} onPress={() => setStartHour(h)}>
-                {startHour === h ? (
-                  <LinearGradient colors={['#5B7FFF', '#8B5CF6']} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{h}:00</Text>
-                  </LinearGradient>
-                ) : (
-                  <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: '#F0ECF6' }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B5B8A' }}>{h}:00</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
+            {hours.map((h) => {
+              const isApproved = approvedHours.has(h);
+              const isPending = pendingHours.has(h);
+              const isBooked = isApproved || isPending;
+              return (
+                <TouchableOpacity 
+                  key={h} 
+                  onPress={() => !isBooked && setStartHour(h)}
+                  disabled={isBooked}
+                  activeOpacity={isBooked ? 1 : 0.7}
+                >
+                  {isApproved ? (
+                    <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(239,68,68,0.2)', borderWidth: 1, borderColor: '#EF4444' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#EF4444' }}>{h}:00</Text>
+                    </View>
+                  ) : isPending ? (
+                    <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(169,169,169,0.2)', borderWidth: 1, borderColor: '#A9A9A9' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#A9A9A9' }}>{h}:00</Text>
+                    </View>
+                  ) : startHour === h ? (
+                    <LinearGradient colors={['#5B7FFF', '#8B5CF6']} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{h}:00</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: '#F0ECF6' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B5B8A' }}>{h}:00</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
 
@@ -233,13 +285,20 @@ function NewEventModal({ day, onClose }: { day: number; onClose: () => void }) {
         </View>
 
         {/* Status indicator */}
-        <View style={{ backgroundColor: '#EDE6FA', borderRadius: 16, padding: 12, marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <MaterialCommunityIcons name="circle" size={8} color="#7C3AED" />
-          <Text style={{ fontSize: 12, fontWeight: '600', color: '#7C3AED' }}>{room} is free at {startHour}:00 for {span}h</Text>
+        <View style={{ backgroundColor: canSelectTime ? '#EDE6FA' : 'rgba(239,68,68,0.1)', borderRadius: 16, padding: 12, marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <MaterialCommunityIcons name="circle" size={8} color={canSelectTime ? '#7C3AED' : '#EF4444'} />
+          <Text style={{ fontSize: 12, fontWeight: '600', color: canSelectTime ? '#7C3AED' : '#EF4444' }}>
+            {canSelectTime ? `${room} is free at ${startHour}:00 for ${span}h` : 'This time slot is booked'}
+          </Text>
         </View>
 
         <TouchableOpacity onPress={submit} activeOpacity={0.9}>
-          <LinearGradient colors={['#5B7FFF', '#8B5CF6', '#EC4899']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.submitFull}>
+          <LinearGradient 
+            colors={canSelectTime && title.trim() ? ['#5B7FFF', '#8B5CF6', '#EC4899'] : ['#CCCCCC', '#AAAAAA']} 
+            start={{ x: 0, y: 0 }} 
+            end={{ x: 1, y: 0 }} 
+            style={s.submitFull}
+          >
             <MaterialCommunityIcons name="send" size={18} color="#FFF" />
             <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF', letterSpacing: 1 }}>ADD EVENT</Text>
           </LinearGradient>

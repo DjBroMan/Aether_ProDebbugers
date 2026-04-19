@@ -45,8 +45,11 @@ export default function FacultyDashboard() {
   const displayName = user?.name ?? 'Professor';
   const myQueue = approvals.filter((a) => {
     const cur = a.chain.find((c) => c.status === 'current');
-    return cur?.by === tier;
+    const matches = cur?.by === tier;
+    console.log('[FacultyDashboard] Approval:', a.title, 'Current stage by:', cur?.by, 'Tier:', tier, 'Matches:', matches);
+    return matches;
   });
+  console.log('[FacultyDashboard] Total approvals:', approvals.length, 'Matching queue:', myQueue.length, 'Tier:', tier);
 
   const handlePublishNotice = () => {
     if (!noticeTitle.trim()) return;

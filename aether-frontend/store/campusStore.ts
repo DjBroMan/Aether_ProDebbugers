@@ -56,6 +56,7 @@ export type ScheduleEvent = {
   startHour: number;
   span: number;
   kind: 'class' | 'event' | 'lab';
+  status?: 'pending' | 'approved';
 };
 
 export type Payment = {
@@ -193,6 +194,27 @@ import { socketService } from '../services/socket';
 export const useCampusStore = create<CampusState>((set, get) => ({
   approvals: [
     {
+      id: uid(), title: 'Medical Leave', kind: 'Leave' as const, by: 'Priyank',
+      createdAt: now() - 86_400_000 * 3, status: 'Pending' as const,
+      chain: [
+        { label: 'Submitted', by: 'Student' as const, status: 'done' as const, at: fmt(now() - 86_400_000 * 3) },
+        { label: 'Faculty review', by: 'Teacher' as const, status: 'current' as const },
+        { label: 'HOD approval', by: 'HOD' as const, status: 'pending' as const },
+        { label: 'Office issue', by: 'Office' as const, status: 'pending' as const },
+      ],
+      details: { from: 'Apr 19', to: 'Apr 20', reason: 'Fever for 2 days' } as Record<string, string>,
+    },
+    {
+      id: uid(), title: 'WiFi not working', kind: 'Room Booking' as const, by: 'Harshav',
+      createdAt: now() - 86_400_000 * 2, status: 'Pending' as const,
+      chain: [
+        { label: 'Submitted', by: 'Student' as const, status: 'done' as const, at: fmt(now() - 86_400_000 * 2) },
+        { label: 'Event Head', by: 'Teacher' as const, status: 'current' as const },
+        { label: 'HOD approval', by: 'HOD' as const, status: 'pending' as const },
+      ],
+      details: { title: 'Issue reported', location: 'Lab' } as Record<string, string>,
+    },
+    {
       id: uid(), title: 'Leave application', kind: 'Leave' as const, by: 'priyank.s',
       createdAt: now() - 7200_000, status: 'Approved' as const,
       chain: [
@@ -229,12 +251,15 @@ export const useCampusStore = create<CampusState>((set, get) => ({
     { id: uid(), title: 'AC not cooling · A-104', location: 'A-104', category: 'Facilities', priority: 'Medium', status: 'Resolved', createdAt: now() - 86_400_000 * 2, by: 'priyank.s', photos: [] },
   ],
   schedule: [
-    { id: uid(), title: 'Calculus II', room: 'B-201', day: 0, startHour: 9, span: 1, kind: 'class' },
-    { id: uid(), title: 'Quantum Physics', room: 'A-104', day: 0, startHour: 10, span: 1, kind: 'class' },
-    { id: uid(), title: 'Lab — Circuits', room: 'Lab-3', day: 0, startHour: 13, span: 2, kind: 'lab' },
-    { id: uid(), title: 'Robotics Workshop', room: 'Lab-3', day: 0, startHour: 14, span: 1, kind: 'event' },
-    { id: uid(), title: 'Data Structures', room: 'A-204', day: 1, startHour: 11, span: 1, kind: 'class' },
-    { id: uid(), title: 'ML Seminar', room: 'Auditorium', day: 2, startHour: 15, span: 2, kind: 'event' },
+    { id: uid(), title: 'Calculus II', room: 'B-201', day: 0, startHour: 9, span: 1, kind: 'class', status: 'approved' },
+    { id: uid(), title: 'Early Class', room: 'A-104', day: 0, startHour: 8, span: 1, kind: 'class', status: 'approved' },
+    { id: uid(), title: 'Quantum Physics', room: 'A-104', day: 0, startHour: 10, span: 1, kind: 'class', status: 'approved' },
+    { id: uid(), title: 'Physics Lab', room: 'A-104', day: 0, startHour: 14, span: 2, kind: 'lab', status: 'approved' },
+    { id: uid(), title: 'Pending Meeting', room: 'A-104', day: 0, startHour: 16, span: 1, kind: 'event', status: 'pending' },
+    { id: uid(), title: 'Lab — Circuits', room: 'Lab-3', day: 0, startHour: 13, span: 2, kind: 'lab', status: 'approved' },
+    { id: uid(), title: 'Robotics Workshop', room: 'Lab-3', day: 0, startHour: 14, span: 1, kind: 'event', status: 'approved' },
+    { id: uid(), title: 'Data Structures', room: 'A-204', day: 1, startHour: 11, span: 1, kind: 'class', status: 'approved' },
+    { id: uid(), title: 'ML Seminar', room: 'Auditorium', day: 2, startHour: 15, span: 2, kind: 'event', status: 'approved' },
   ],
   payments: [],
   notices: [
@@ -356,7 +381,7 @@ export const useCampusStore = create<CampusState>((set, get) => ({
   },
 
   addScheduleEvent: (input) => {
-    const e: ScheduleEvent = { ...input, id: uid() };
+    const e: ScheduleEvent = { ...input, id: uid(), status: 'pending' };
     set((s) => ({ schedule: [...s.schedule, e] }));
     return e;
   },
@@ -451,7 +476,7 @@ export const useCampusStore = create<CampusState>((set, get) => ({
     // 4. Approvals
     try {
       const appRes = await axios.get(`${API_BASE_URL}/api/approvals`, { headers });
-      if (Array.isArray(appRes.data)) {
+      if (Array.isArray(appRes.data) && appRes.data.length > 0) {
         const mapped = appRes.data.map((a: any) => {
           let chain = defaultChain((a.type || 'Leave') as ApprovalKind);
           if (a.status === 'PENDING_HOD') chain = chain.map((c, i) => i <= 1 ? { ...c, status: 'done' as const } : i === 2 ? { ...c, status: 'current' as const } : c);

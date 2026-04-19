@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Modal, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useTheme, GRADIENT, SHADOWS, RADIUS, FONT } from '../../constants/designTokens';
 import {
@@ -24,6 +25,7 @@ export default function AdminDashboard() {
 
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [drillDown, setDrillDown] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<any>(null);
 
   // Compute real metrics
   const totalRequests = approvals.length;
@@ -182,7 +184,7 @@ export default function AdminDashboard() {
         ))}
       </GlassCard>
 
-      {/* ═══ Pending Issues with RESOLVE button ═══ */}
+      {/* ═══ Pending Issues - Click to view details ═══ */}
       <GlassCard theme={theme} style={{ marginTop: 16 }}>
         <SectionHeader icon="alert-outline" title="Pending Issues" trailing={{ text: 'All →', onPress: () => router.push('/(tabs)/report') }} theme={theme} />
         {tickets.filter(t => t.status !== 'Resolved' && t.status !== 'RESOLVED').length === 0 ? (
@@ -190,19 +192,14 @@ export default function AdminDashboard() {
         ) : (
           <View style={{ gap: 8 }}>
             {tickets.filter(t => t.status !== 'Resolved' && t.status !== 'RESOLVED').slice(0, 5).map((t) => (
-              <View key={t.id} style={[sty.permItem, { backgroundColor: theme.secondary }]}>
+              <TouchableOpacity key={t.id} onPress={() => setSelectedTicket(t)} style={[sty.permItem, { backgroundColor: theme.secondary }]}>
                 <GradientIconCircle icon="wrench" size={36} iconSize={16} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground }}>{t.title}</Text>
                   <Text style={{ fontSize: 11, color: theme.muted }}>{t.location} · {t.priority} Priority</Text>
                 </View>
-                <TouchableOpacity
-                  onPress={() => store.updateTicketStatus(t.id, 'Resolved')}
-                  style={{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(16,185,129,0.15)' }}
-                >
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>RESOLVE</Text>
-                </TouchableOpacity>
-              </View>
+                <MaterialCommunityIcons name="chevron-right" size={18} color={theme.muted} />
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -223,6 +220,84 @@ export default function AdminDashboard() {
         </GradientCard>
       )}
       <View style={{ height: 20 }} />
+
+      {/* Ticket Detail Modal */}
+      <Modal visible={!!selectedTicket} transparent animationType="slide">
+        {selectedTicket && (
+          <View style={{ flex: 1, backgroundColor: 'rgba(30,16,64,0.4)', justifyContent: 'flex-end' }}>
+            <ScrollView style={{ backgroundColor: theme.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '90%' }}>
+              <View style={{ padding: 20 }}>
+                {/* Header */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <View>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: theme.primary, letterSpacing: 1 }}>ISSUE DETAILS</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: theme.foreground, marginTop: 4 }}>{selectedTicket.title}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setSelectedTicket(null)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.secondary, alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialCommunityIcons name="close" size={18} color={theme.foreground} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Metadata */}
+                <View style={{ gap: 10, marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.secondary, borderRadius: 12, padding: 10 }}>
+                    <MaterialCommunityIcons name="map-marker-outline" size={16} color={theme.primary} />
+                    <Text style={{ fontSize: 13, color: theme.foreground }}>{selectedTicket.location}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.secondary, borderRadius: 12, padding: 10 }}>
+                      <MaterialCommunityIcons name="tag-outline" size={16} color={theme.primary} />
+                      <Text style={{ fontSize: 13, color: theme.foreground }}>{selectedTicket.category}</Text>
+                    </View>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: selectedTicket.priority === 'High' ? 'rgba(239,68,68,0.15)' : selectedTicket.priority === 'Medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', borderRadius: 12, padding: 10 }}>
+                      <MaterialCommunityIcons name="alert-circle" size={16} color={selectedTicket.priority === 'High' ? '#EF4444' : selectedTicket.priority === 'Medium' ? '#F59E0B' : '#10B981'} />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: selectedTicket.priority === 'High' ? '#EF4444' : selectedTicket.priority === 'Medium' ? '#F59E0B' : '#10B981' }}>{selectedTicket.priority}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.secondary, borderRadius: 12, padding: 10 }}>
+                    <MaterialCommunityIcons name="account-outline" size={16} color={theme.primary} />
+                    <Text style={{ fontSize: 13, color: theme.foreground }}>By: {selectedTicket.by}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.secondary, borderRadius: 12, padding: 10 }}>
+                    <MaterialCommunityIcons name={selectedTicket.status === 'Open' ? 'clock-outline' : selectedTicket.status === 'In Progress' ? 'progress-clock' : 'check-circle-outline'} size={16} color={selectedTicket.status === 'Open' ? theme.destructive : selectedTicket.status === 'In Progress' ? '#F59E0B' : '#10B981'} />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: selectedTicket.status === 'Open' ? theme.destructive : selectedTicket.status === 'In Progress' ? '#F59E0B' : '#10B981' }}>{selectedTicket.status}</Text>
+                  </View>
+                </View>
+
+                {/* Photos */}
+                {selectedTicket.photos && selectedTicket.photos.length > 0 && (
+                  <>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.foreground, marginBottom: 10 }}>ATTACHMENTS</Text>
+                    <View style={{ gap: 8, marginBottom: 16 }}>
+                      {selectedTicket.photos.map((photo: string, idx: number) => (
+                        <Image key={idx} source={{ uri: photo }} style={{ width: '100%', height: 200, borderRadius: 12 }} />
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {/* Actions */}
+                {selectedTicket.status !== 'Resolved' && (
+                  <View style={{ gap: 8 }}>
+                    {selectedTicket.status === 'Open' && (
+                      <TouchableOpacity onPress={() => { store.updateTicketStatus(selectedTicket.id, 'In Progress'); setSelectedTicket(null); }} activeOpacity={0.9}>
+                        <LinearGradient colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]} style={{ borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFF' }}>START INVESTIGATING</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={() => { store.updateTicketStatus(selectedTicket.id, selectedTicket.status === 'In Progress' ? 'Resolved' : 'In Progress'); setSelectedTicket(null); }} activeOpacity={0.9}>
+                      <LinearGradient colors={['#10B981', '#059669']} style={{ borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFF' }}>{selectedTicket.status === 'In Progress' ? 'MARK RESOLVED' : 'MARK IN PROGRESS'}</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+      </Modal>
 
       <NotificationsModal visible={notifModalVisible} onClose={() => setNotifModalVisible(false)} />
     </ScrollView>
