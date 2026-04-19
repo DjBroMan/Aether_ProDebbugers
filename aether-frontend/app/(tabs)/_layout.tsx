@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,13 +6,10 @@ import { useAuthStore } from '../../store/authStore';
 import { useCampusStore } from '../../store/campusStore';
 import { useEffect } from 'react';
 import { CommonActions, useNavigation } from '@react-navigation/native';
-import { GRADIENT, useTheme, ThemeProvider } from '../../constants/designTokens';
-import { ToastNotification } from '../../components/ui/ToastNotification';
 
 export default function TabLayout() {
   const { user } = useAuthStore();
   const navigation = useNavigation();
-  const theme = useTheme();
 
   // Auth guard & Real-time init
   useEffect(() => {
@@ -28,24 +25,24 @@ export default function TabLayout() {
   }, [user]);
 
   return (
-    <>
-      <ToastNotification />
-      <Tabs
-        screenOptions={{
+    <Tabs
+      screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: theme.tabBar,
+          backgroundColor: 'rgba(255,255,255,0.95)',
           borderTopWidth: 1,
-          borderTopColor: theme.tabBarBorder,
+          borderTopColor: '#E4DCF0',
           paddingBottom: 8,
-          paddingTop: 4,
+          paddingTop: 8,
           height: 64,
+          elevation: 0,
         },
-        tabBarActiveTintColor: theme.tabBarActive,
-        tabBarInactiveTintColor: theme.tabBarInactive,
+        tabBarActiveTintColor: '#7C3AED',
+        tabBarInactiveTintColor: '#A394C0',
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '600',
+          fontWeight: '700',
+          marginTop: -4,
         },
       }}>
       <Tabs.Screen
@@ -54,18 +51,18 @@ export default function TabLayout() {
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
             <View style={focused ? s.activeIconBg : undefined}>
-              <MaterialCommunityIcons name="home" size={22} color={color} />
+              <MaterialCommunityIcons name="view-dashboard-outline" size={focused ? 24 : 22} color={color} />
             </View>
           ),
         }}
       />
       <Tabs.Screen
-        name="approvals"
+        name="schedule"
         options={{
           title: 'Schedule',
           tabBarIcon: ({ color, focused }) => (
             <View style={focused ? s.activeIconBg : undefined}>
-              <MaterialCommunityIcons name="calendar-month" size={22} color={color} />
+              <MaterialCommunityIcons name="calendar-month" size={focused ? 24 : 22} color={color} />
             </View>
           ),
         }}
@@ -77,11 +74,11 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => (
             <View style={s.centerTab}>
               <LinearGradient
-                colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.end]}
+                colors={['#5B7FFF', '#8B5CF6', '#EC4899']}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={s.centerOrb}
               >
-                <MaterialCommunityIcons name="creation" size={28} color="#FFF" />
+                <MaterialCommunityIcons name="robot-outline" size={28} color="#FFF" />
               </LinearGradient>
             </View>
           ),
@@ -91,10 +88,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="report"
         options={{
-          title: 'Alerts',
+          title: 'Issues',
           tabBarIcon: ({ color, focused }) => (
             <View style={focused ? s.activeIconBg : undefined}>
-              <MaterialCommunityIcons name="bell-outline" size={22} color={color} />
+              <MaterialCommunityIcons name="alert-circle-outline" size={focused ? 24 : 22} color={color} />
             </View>
           ),
         }}
@@ -105,22 +102,24 @@ export default function TabLayout() {
           title: 'Me',
           tabBarIcon: ({ color, focused }) => (
             <View style={focused ? s.activeIconBg : undefined}>
-              <MaterialCommunityIcons name="account" size={22} color={color} />
+              <MaterialCommunityIcons name="account-circle-outline" size={focused ? 24 : 22} color={color} />
             </View>
           ),
         }}
       />
+      {/* Hidden screens — accessible via router.push */}
       <Tabs.Screen name="admin" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen name="approvals" options={{ href: null }} />
+      <Tabs.Screen name="pay" options={{ href: null }} />
     </Tabs>
-    </>
   );
 }
 
 const s = StyleSheet.create({
   activeIconBg: {
     backgroundColor: 'rgba(124,58,237,0.12)',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 6,
   },
   centerTab: {
@@ -137,5 +136,7 @@ const s = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 8,
+    borderWidth: 4,
+    borderColor: '#F8F5FF'
   },
 });

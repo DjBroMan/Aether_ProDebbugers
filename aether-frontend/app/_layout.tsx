@@ -14,6 +14,8 @@ import '../global.css';
  * DO NOT add navigation hooks here — the Stack is not ready
  * when layout effects fire, causing the 'navigate before mounting' crash.
  */
+import { ToastNotification } from '../components/ui/ToastNotification';
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -26,6 +28,7 @@ export default function RootLayout() {
         <Stack.Screen name="finance" options={{ presentation: 'modal' }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
+      <ToastNotification />
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </ThemeProvider>
   );

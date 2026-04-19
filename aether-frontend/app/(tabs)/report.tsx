@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, GRADIENT, SHADOWS, RADIUS, FONT } from '../../constants/designTokens';
+import { GRADIENT, SHADOWS, RADIUS, FONT } from '../../constants/designTokens';
 import { GlassCard, GradientIconCircle, FilterChip, GradientButton, SectionHeader } from '../../components/ui/AetherUI';
 import { useAuthStore } from '../../store/authStore';
 import { useCampusStore, type Ticket } from '../../store/campusStore';
@@ -10,7 +10,7 @@ import { useCampusStore, type Ticket } from '../../store/campusStore';
 const filterTabs = ['All', 'Open', 'In Progress', 'Resolved'] as const;
 
 export default function ReportScreen() {
-  const theme = useTheme();
+  const theme = { background: '#F8F5FF', card: '#FFFFFF', foreground: '#1E1040', muted: '#A394C0', border: '#E4DCF0', primary: '#7C3AED', accent: '#EDE6FA', secondary: '#F0ECF6', destructive: '#EF4444', inputBg: 'rgba(240,236,246,0.6)' };
   const { user } = useAuthStore();
   const { tickets, createTicket, updateTicketStatus } = useCampusStore();
   const role = user?.role ?? 'STUDENT';

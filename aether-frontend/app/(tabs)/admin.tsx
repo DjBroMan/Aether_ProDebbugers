@@ -1,5 +1,4 @@
 import { View, Text } from 'react-native';
-import { useTheme } from '../../constants/designTokens';
 
 /**
  * Hidden tab screen — Admin features are rendered via the role-based
@@ -7,10 +6,9 @@ import { useTheme } from '../../constants/designTokens';
  * This file exists only to satisfy Expo Router's file-based routing.
  */
 export default function AdminPlaceholder() {
-  const theme = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: theme.muted, fontSize: 14 }}>Admin dashboard loaded from Home tab</Text>
+    <View style={{ flex: 1, backgroundColor: '#F8F5FF', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: '#A394C0', fontSize: 14 }}>Admin dashboard loaded from Home tab</Text>
     </View>
   );
 }

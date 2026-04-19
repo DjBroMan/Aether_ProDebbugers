@@ -10,6 +10,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useCampusStore, type FacultyTier } from '../../store/campusStore';
 import { ReportIssueModal } from '../ui/ReportIssueModal';
+import { NotificationsModal } from '../ui/NotificationsModal';
 
 const tiers: { key: FacultyTier; icon: string }[] = [
   { key: 'Teacher', icon: 'school' },
@@ -39,6 +40,7 @@ export default function FacultyDashboard() {
   const [noticeBody, setNoticeBody] = useState('');
   const [noticeAudience, setNoticeAudience] = useState<'All' | 'CSE' | 'ECE' | 'MECH'>('CSE');
   const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [notifModalVisible, setNotifModalVisible] = useState(false);
 
   const displayName = user?.name ?? 'Professor';
   const myQueue = approvals.filter((a) => {
@@ -60,7 +62,7 @@ export default function FacultyDashboard() {
         roleLabel={`FACULTY · ${tier.toUpperCase()}`}
         name={displayName}
         initial={displayName[0]}
-        onBell={() => {}} onLogout={logout} theme={theme}
+        onBell={() => setNotifModalVisible(true)} onLogout={logout} theme={theme}
         unread={notifications.some((n) => !n.read)}
       />
 
@@ -209,6 +211,7 @@ export default function FacultyDashboard() {
       </BottomSheet>
 
       <ReportIssueModal visible={reportModalVisible} onClose={() => setReportModalVisible(false)} />
+      <NotificationsModal visible={notifModalVisible} onClose={() => setNotifModalVisible(false)} />
     </ScrollView>
   );
 }

@@ -68,8 +68,8 @@ const dark = {
 export type Theme = typeof light;
 
 export function useTheme(): Theme {
-  const scheme = useColorScheme();
-  return scheme === 'dark' ? dark : light;
+  // Force consistent light theme across all screens
+  return light;
 }
 
 /* ── Shadows ──────────────────────────────────────────────── */

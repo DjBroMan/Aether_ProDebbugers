@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -9,12 +9,7 @@ import {
 } from '../ui/AetherUI';
 import { useAuthStore } from '../../store/authStore';
 import { useCampusStore, analyticsSummary } from '../../store/campusStore';
-
-const systemStats = [
-  { k: 'Students', v: '2,418', icon: 'school' },
-  { k: 'Faculty', v: '184', icon: 'book-open-page-variant' },
-  { k: 'Active', v: '1.2k', icon: 'pulse' },
-];
+import { NotificationsModal } from '../ui/NotificationsModal';
 
 export default function AdminDashboard() {
   const theme = useTheme();
@@ -23,23 +18,43 @@ export default function AdminDashboard() {
   const store = useCampusStore();
   const notifications = store.notifications;
   const tickets = store.tickets;
+  const approvals = store.approvals;
   const summary = analyticsSummary(store);
   const displayName = user?.name ?? 'Admin';
 
+  const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [drillDown, setDrillDown] = useState<string | null>(null);
+
+  // Compute real metrics
+  const totalRequests = approvals.length;
+  const pendingRequests = approvals.filter(a => a.status === 'Pending' || a.status === 'In Review').length;
+  const approvedRequests = approvals.filter(a => a.status === 'Approved').length;
+  const openIssues = tickets.filter(t => t.status !== 'Resolved' && t.status !== 'RESOLVED').length;
+
+  // Drill-down: HOD breakdown
+  const hodBreakdown = () => {
+    const map: Record<string, number> = {};
+    approvals.filter(a => a.status !== 'Approved' && a.status !== 'Rejected').forEach(a => {
+      const cur = a.chain.find(c => c.status === 'current');
+      if (cur) map[cur.label] = (map[cur.label] || 0) + 1;
+    });
+    return Object.entries(map);
+  };
+
+  // Issue grouping by location
   const ticketsByLoc = new Map<string, number>();
   tickets.forEach((t) => ticketsByLoc.set(t.location, (ticketsByLoc.get(t.location) ?? 0) + 1));
   const heat = Array.from(ticketsByLoc.entries()).sort((a, b) => b[1] - a[1]);
 
-  const facPerms = [
-    { name: 'M. Rao', role: 'CSE', on: true },
-    { name: 'S. Khanna', role: 'ECE', on: true },
-    { name: 'P. Verma', role: 'MECH', on: false },
-  ];
+  // Issue grouping by category
+  const itIssues = tickets.filter(t => t.category === 'IT').length;
+  const maintIssues = tickets.filter(t => t.category === 'Maintenance').length;
+  const facIssues = tickets.filter(t => t.category === 'Facilities').length;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
       {/* Welcome */}
-      <WelcomeBar roleLabel="ADMINISTRATOR" name={displayName} initial={displayName[0]} onBell={() => {}} onLogout={logout} theme={theme}
+      <WelcomeBar roleLabel="ADMINISTRATOR" name={displayName} initial={displayName[0]} onBell={() => setNotifModalVisible(true)} onLogout={logout} theme={theme}
         unread={notifications.some((n) => !n.read)} />
 
       {/* Hero */}
@@ -49,7 +64,11 @@ export default function AdminDashboard() {
           <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFF', marginTop: 4 }}>System Overview</Text>
           <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>All nodes synced · 99.98% uptime</Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
-            {systemStats.map((s) => (
+            {[
+              { k: 'Students', v: '2,418', icon: 'school' },
+              { k: 'Faculty', v: '184', icon: 'book-open-page-variant' },
+              { k: 'Active', v: '1.2k', icon: 'pulse' },
+            ].map((s) => (
               <View key={s.k} style={sty.heroStat}>
                 <MaterialCommunityIcons name={s.icon as any} size={16} color="#FFF" />
                 <Text style={{ fontSize: 10, letterSpacing: 2, fontWeight: '700', color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>{s.k.toUpperCase()}</Text>
@@ -62,95 +81,97 @@ export default function AdminDashboard() {
 
       {/* Quick actions */}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
-        <QuickTile icon="chart-bar" label="Analytics" onPress={() => {}} theme={theme} />
+        <QuickTile icon="chart-bar" label="Analytics" onPress={() => setDrillDown(drillDown === 'analytics' ? null : 'analytics')} theme={theme} />
         <QuickTile icon="shield-check" label="Approvals" onPress={() => router.push('/(tabs)/approvals')} theme={theme} />
         <QuickTile icon="alert-outline" label="Issues" onPress={() => router.push('/(tabs)/report')} theme={theme} />
         <QuickTile icon="apps" label="Apps" onPress={() => router.push('/(tabs)/explore')} theme={theme} />
       </View>
 
-      {/* Live Operations */}
+      {/* ═══ KEY METRICS TILES ═══ */}
       <GlassCard theme={theme} style={{ marginTop: 16 }}>
-        <SectionHeader icon="pulse" title="Live Operations" trailing={{ text: 'Detailed →', onPress: () => {} }} theme={theme} />
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-          {[
-            { k: 'PENDING', v: summary.pending },
-            { k: 'OPEN TICKETS', v: summary.openTickets },
-            { k: 'HIGH-PRI', v: summary.highPri },
-          ].map((s) => (
-            <View key={s.k} style={[sty.kpiCard, { backgroundColor: theme.secondary }]}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: theme.primary }}>{s.v}</Text>
-              <Text style={{ fontSize: 9, letterSpacing: 2, fontWeight: '700', color: theme.muted }}>{s.k}</Text>
-            </View>
-          ))}
-        </View>
-        {/* Progress bars */}
-        {[
-          { name: 'Approvals', val: Math.min(100, summary.approved * 12 + 40), tag: summary.pending > 5 ? 'Backlog' : 'OK' },
-          { name: 'Tickets', val: Math.max(20, 100 - summary.openTickets * 12), tag: summary.highPri > 0 ? 'Hot' : 'OK' },
-          { name: 'Payments', val: Math.min(100, summary.totalPaid / 50), tag: 'OK' },
-        ].map((b) => (
-          <View key={b.name} style={{ marginBottom: 8 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.foreground }}>{b.name}</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: b.tag === 'Backlog' ? GRADIENT.end : b.tag === 'Hot' ? theme.destructive : theme.primary }}>{b.tag}</Text>
-            </View>
-            <View style={{ height: 6, backgroundColor: theme.secondary, borderRadius: 3, overflow: 'hidden' }}>
-              <View style={{ height: '100%', width: `${b.val}%`, backgroundColor: theme.primary, borderRadius: 3 }} />
-            </View>
+        <SectionHeader icon="chart-box" title="Key Metrics" theme={theme} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          <TouchableOpacity onPress={() => setDrillDown(drillDown === 'pending' ? null : 'pending')} style={[sty.metricTile, { backgroundColor: theme.secondary }]}>
+            <MaterialCommunityIcons name="clock-outline" size={20} color={theme.primary} />
+            <Text style={{ fontSize: 24, fontWeight: '800', color: theme.primary }}>{pendingRequests}</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1, color: theme.muted }}>PENDING</Text>
+          </TouchableOpacity>
+          <View style={[sty.metricTile, { backgroundColor: theme.secondary }]}>
+            <MaterialCommunityIcons name="check-circle-outline" size={20} color="#10B981" />
+            <Text style={{ fontSize: 24, fontWeight: '800', color: '#10B981' }}>{approvedRequests}</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1, color: theme.muted }}>APPROVED</Text>
           </View>
-        ))}
+          <View style={[sty.metricTile, { backgroundColor: theme.secondary }]}>
+            <MaterialCommunityIcons name="file-document-multiple-outline" size={20} color="#5B7FFF" />
+            <Text style={{ fontSize: 24, fontWeight: '800', color: '#5B7FFF' }}>{totalRequests}</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1, color: theme.muted }}>TOTAL REQ</Text>
+          </View>
+          <View style={[sty.metricTile, { backgroundColor: theme.secondary }]}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={20} color={theme.destructive} />
+            <Text style={{ fontSize: 24, fontWeight: '800', color: theme.destructive }}>{openIssues}</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1, color: theme.muted }}>OPEN ISSUES</Text>
+          </View>
+        </View>
+        {/* Avg resolution */}
+        <View style={[sty.avgCard, { backgroundColor: theme.secondary, marginTop: 8 }]}>
+          <MaterialCommunityIcons name="timer-outline" size={18} color={theme.primary} />
+          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground, flex: 1, marginLeft: 8 }}>Avg Resolution Time</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: theme.primary }}>2 days</Text>
+        </View>
       </GlassCard>
 
-      {/* Faculty Permissions */}
-      <GlassCard theme={theme} style={{ marginTop: 16 }}>
-        <SectionHeader icon="lock-outline" title="Faculty Permissions" trailing={{ text: 'Edit →', onPress: () => {} }} theme={theme} />
-        <View style={{ gap: 8 }}>
-          {facPerms.map((f) => (
-            <View key={f.name} style={[sty.permItem, { backgroundColor: theme.secondary }]}>
-              <GradientIconCircle icon="account" size={36} iconSize={16} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground }}>{f.name}</Text>
-                <Text style={{ fontSize: 11, color: theme.muted }}>{f.role} · Approvals & Notify</Text>
+      {/* ═══ DRILL-DOWN: Pending breakdown ═══ */}
+      {drillDown === 'pending' && (
+        <GlassCard theme={theme} style={{ marginTop: 8 }}>
+          <SectionHeader icon="arrow-collapse-down" title="Pending Breakdown" theme={theme} />
+          <Text style={{ fontSize: 12, color: theme.muted, marginBottom: 8 }}>
+            {pendingRequests} pending approvals at various levels:
+          </Text>
+          {hodBreakdown().length === 0 ? (
+            <Text style={{ fontSize: 12, color: theme.muted, textAlign: 'center', paddingVertical: 12 }}>All clear!</Text>
+          ) : (
+            hodBreakdown().map(([stage, count]) => (
+              <View key={stage} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <MaterialCommunityIcons name="account-tie" size={16} color={theme.primary} />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground }}>{stage}</Text>
+                </View>
+                <View style={{ backgroundColor: theme.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: theme.primary }}>{count}</Text>
+                </View>
               </View>
-              <Text style={{
-                fontSize: 10, letterSpacing: 2, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
-                color: f.on ? theme.primary : theme.destructive,
-                backgroundColor: f.on ? theme.accent : 'rgba(239,68,68,0.1)',
-              }}>{f.on ? 'ACTIVE' : 'RESTRICTED'}</Text>
-            </View>
-          ))}
-        </View>
-      </GlassCard>
+            ))
+          )}
+        </GlassCard>
+      )}
 
-      {/* System Activity */}
+      {/* ═══ Trend Alerts ═══ */}
       <GlassCard theme={theme} style={{ marginTop: 16 }}>
-        <SectionHeader title="System Activity" trailing={{ text: 'All →', onPress: () => {} }} theme={theme} />
-        {notifications.slice(0, 4).map((a) => (
-          <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialCommunityIcons name="bell-outline" size={16} color={theme.primary} />
+        <SectionHeader icon="trending-up" title="Trend Alerts" theme={theme} />
+        {[
+          { icon: 'clock-alert-outline', text: `Avg resolution time: 2 days`, color: '#F59E0B' },
+          { icon: 'wifi-alert', text: `WiFi complaints: ${tickets.filter(t => t.title.toLowerCase().includes('wifi')).length} this week`, color: theme.destructive },
+          { icon: 'account-group', text: `${pendingRequests} pending approvals in pipeline`, color: theme.primary },
+        ].map((alert, i) => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: i < 2 ? 1 : 0, borderBottomColor: theme.border }}>
+            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: `${alert.color}15`, alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialCommunityIcons name={alert.icon as any} size={16} color={alert.color} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground }} numberOfLines={1}>{a.title}</Text>
-              <Text style={{ fontSize: 11, color: theme.muted }} numberOfLines={1}>{a.body}</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={16} color={theme.muted} />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground, flex: 1 }}>{alert.text}</Text>
           </View>
         ))}
       </GlassCard>
 
-      {/* Support Heatmap */}
+      {/* ═══ Support Heatmap ═══ */}
       <GlassCard theme={theme} style={{ marginTop: 16 }}>
         <SectionHeader icon="fire" title="Support Heatmap" theme={theme} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
           {Array.from({ length: 28 }).map((_, i) => {
             const intensity = [0.1, 0.25, 0.4, 0.6, 0.8, 1][Math.floor(Math.abs(Math.sin(i * 1.7 + tickets.length)) * 6)];
-            return (
-              <View key={i} style={{ width: '13%', aspectRatio: 1, borderRadius: 6, backgroundColor: theme.primary, opacity: intensity }} />
-            );
+            return <View key={i} style={{ width: '13%', aspectRatio: 1, borderRadius: 6, backgroundColor: theme.primary, opacity: intensity }} />;
           })}
         </View>
-        {heat.slice(0, 3).map(([loc, count]) => (
+        {heat.slice(0, 5).map(([loc, count]) => (
           <View key={loc} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <MaterialCommunityIcons name="fire" size={12} color={GRADIENT.end} />
@@ -161,11 +182,11 @@ export default function AdminDashboard() {
         ))}
       </GlassCard>
 
-      {/* Pending Issues */}
+      {/* ═══ Pending Issues with RESOLVE button ═══ */}
       <GlassCard theme={theme} style={{ marginTop: 16 }}>
-        <SectionHeader icon="alert-outline" title="Pending Issues" trailing={{ text: 'All →', onPress: () => {} }} theme={theme} />
+        <SectionHeader icon="alert-outline" title="Pending Issues" trailing={{ text: 'All →', onPress: () => router.push('/(tabs)/report') }} theme={theme} />
         {tickets.filter(t => t.status !== 'Resolved' && t.status !== 'RESOLVED').length === 0 ? (
-          <Text style={{ fontSize: 12, color: theme.muted, textAlign: 'center', paddingVertical: 16 }}>No open issues.</Text>
+          <Text style={{ fontSize: 12, color: theme.muted, textAlign: 'center', paddingVertical: 16 }}>No open issues. 🎉</Text>
         ) : (
           <View style={{ gap: 8 }}>
             {tickets.filter(t => t.status !== 'Resolved' && t.status !== 'RESOLVED').slice(0, 5).map((t) => (
@@ -175,23 +196,9 @@ export default function AdminDashboard() {
                   <Text style={{ fontSize: 13, fontWeight: '600', color: theme.foreground }}>{t.title}</Text>
                   <Text style={{ fontSize: 11, color: theme.muted }}>{t.location} · {t.priority} Priority</Text>
                 </View>
-                <TouchableOpacity 
-                  onPress={async () => {
-                    try {
-                      const axios = require('axios').default;
-                      const { API_BASE_URL } = require('../../constants/api');
-                      await axios.patch(`${API_BASE_URL}/api/tickets/${t.id}/resolve`, {}, {
-                        headers: { Authorization: `Bearer ${user?.token}` }
-                      });
-                      store.updateTicketStatus(t.id, 'Resolved');
-                    } catch (e) {
-                      console.error('Failed to resolve issue', e);
-                    }
-                  }} 
-                  style={{
-                    paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8,
-                    backgroundColor: 'rgba(16,185,129,0.15)',
-                  }}
+                <TouchableOpacity
+                  onPress={() => store.updateTicketStatus(t.id, 'Resolved')}
+                  style={{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(16,185,129,0.15)' }}
                 >
                   <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>RESOLVE</Text>
                 </TouchableOpacity>
@@ -199,23 +206,6 @@ export default function AdminDashboard() {
             ))}
           </View>
         )}
-      </GlassCard>
-
-      {/* Create Account */}
-      <GlassCard theme={theme} style={{ marginTop: 16 }}>
-        <SectionHeader icon="account-plus" title="Create Account" theme={theme} />
-        <TextInput placeholder="Full name" placeholderTextColor={theme.muted}
-          style={{ backgroundColor: theme.inputBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: theme.foreground, marginBottom: 8 }} />
-        <TextInput placeholder="Email / ID" placeholderTextColor={theme.muted}
-          style={{ backgroundColor: theme.inputBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: theme.foreground, marginBottom: 8 }} />
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-          {(['Student', 'Faculty', 'Admin'] as const).map((r) => (
-            <TouchableOpacity key={r} style={{ flex: 1, backgroundColor: theme.secondary, borderRadius: 12, paddingVertical: 8, alignItems: 'center' }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.muted }}>{r}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <GradientButton label="PROVISION IN DB" onPress={() => {}} icon="check-circle" />
       </GlassCard>
 
       {/* Bottleneck alert */}
@@ -233,12 +223,15 @@ export default function AdminDashboard() {
         </GradientCard>
       )}
       <View style={{ height: 20 }} />
+
+      <NotificationsModal visible={notifModalVisible} onClose={() => setNotifModalVisible(false)} />
     </ScrollView>
   );
 }
 
 const sty = StyleSheet.create({
   heroStat: { flex: 1, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.15)', padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  kpiCard: { flex: 1, borderRadius: 16, padding: 10, alignItems: 'center' },
+  metricTile: { width: '48%', borderRadius: 16, padding: 14, alignItems: 'center', gap: 4 },
+  avgCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 12 },
   permItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 10 },
 });

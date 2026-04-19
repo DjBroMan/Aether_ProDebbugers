@@ -162,7 +162,7 @@ interface CampusState {
   // Actions
   createApproval: (input: { title: string; kind: ApprovalKind; by: string; details?: Record<string, string> }) => Promise<string>;
   actOnApproval: (approvalId: string, action: 'approve' | 'reject', actor: FacultyTier, note?: string) => Promise<void>;
-  createTicket: (input: { title: string; location: string; category: Ticket['category']; by: string; photos: string[] }) => string;
+  createTicket: (input: { title: string; location: string; category: Ticket['category']; by: string; photos: string[] }) => Promise<string>;
   updateTicketStatus: (id: string, status: Ticket['status']) => void;
   createPayment: (input: { amount: number; method: Payment['method']; items: Payment['items'] }) => Payment;
   createNotice: (input: { title: string; body: string; audience: Notice['audience']; by: string }) => void;
@@ -170,6 +170,10 @@ interface CampusState {
   setActivePopup: (n: CampusNotification | null) => void;
   markAllRead: () => void;
   addScheduleEvent: (input: Omit<ScheduleEvent, 'id'>) => ScheduleEvent;
+  toggleMiniApp: (appId: string) => void;
+  detectClashes: (day: number) => Set<string>;
+  suggestFreeSlot: (day: number, room: string, span?: number) => number | null;
+  roomAvailability: () => { room: string; status: 'Free' | 'Occupied'; until: string; freeAt: string; by: string }[];
   // Backend Integration
   fetchDashboardData: (token: string, role: string) => Promise<void>;
   initRealTimeSync: (role: string, userId: string) => void;
@@ -286,14 +290,35 @@ export const useCampusStore = create<CampusState>((set, get) => ({
     }
   },
 
-  createTicket: (input) => {
+  createTicket: async (input) => {
     const lower = `${input.title} ${input.location}`.toLowerCase();
     const priority: Ticket['priority'] = /(outage|fire|leak|down|emergency|urgent|crash|electric)/.test(lower) ? 'High' : /(slow|broken|flicker|noise|stuck)/.test(lower) ? 'Medium' : 'Low';
-    const id = uid();
-    const ticket: Ticket = { id, title: input.title, location: input.location, category: input.category, priority, status: 'Open', createdAt: now(), by: input.by, photos: input.photos };
-    set((s) => ({ tickets: [ticket, ...s.tickets] }));
-    get().pushNotification({ title: `Issue logged · ${priority} priority`, body: `${input.title} (${input.location})`, to: input.by, kind: 'ticket' });
-    return id;
+    try {
+      const { user } = useAuthStore.getState();
+      const formData = new FormData();
+      formData.append('title', input.title);
+      formData.append('description', input.title);
+      formData.append('location', input.location);
+      // If photos were provided as base64/URIs, we skip file upload for web compatibility
+      const res = await axios.post(`${API_BASE_URL}/api/tickets`, { title: input.title, description: input.title, location: input.location }, {
+        headers: { Authorization: `Bearer ${user?.token}`, 'x-mock-role': user?.role || 'STUDENT' }
+      });
+      const t = res.data;
+      const ticket: Ticket = {
+        id: t.id, title: t.title, location: t.location || input.location, category: input.category,
+        priority, status: 'Open', createdAt: new Date(t.createdAt).getTime(), by: t.author?.name || input.by, photos: t.imageUrl ? [t.imageUrl] : []
+      };
+      set((s) => ({ tickets: [ticket, ...s.tickets] }));
+      get().pushNotification({ title: `Issue logged · ${priority} priority`, body: `${input.title} (${input.location})`, to: input.by, kind: 'ticket' });
+      return ticket.id;
+    } catch (err) {
+      console.warn('[CampusStore] Ticket API failed, using local fallback', (err as Error).message);
+      const id = uid();
+      const ticket: Ticket = { id, title: input.title, location: input.location, category: input.category, priority, status: 'Open', createdAt: now(), by: input.by, photos: input.photos };
+      set((s) => ({ tickets: [ticket, ...s.tickets] }));
+      get().pushNotification({ title: `Issue logged · ${priority} priority`, body: `${input.title} (${input.location})`, to: input.by, kind: 'ticket' });
+      return id;
+    }
   },
 
   updateTicketStatus: (id, status) => {
@@ -334,133 +359,111 @@ export const useCampusStore = create<CampusState>((set, get) => ({
     set((s) => ({ miniApps: s.miniApps.map((m) => (m.id === appId ? { ...m, installed: !m.installed } : m)) }));
   },
 
+  detectClashes: (day) => {
+    const events = get().schedule.filter((e) => e.day === day);
+    const clashes = new Set<string>();
+    for (let i = 0; i < events.length; i++) {
+      for (let j = i + 1; j < events.length; j++) {
+        const a = events[i], b = events[j];
+        const aEnd = a.startHour + a.span;
+        const bEnd = b.startHour + b.span;
+        if (a.startHour < bEnd && b.startHour < aEnd && a.room === b.room) {
+          clashes.add(a.id); clashes.add(b.id);
+        }
+      }
+    }
+    return clashes;
+  },
+
+  suggestFreeSlot: (day, room, span = 1) => {
+    const events = get().schedule.filter((e) => e.day === day && e.room === room);
+    for (let h = 8; h <= 18 - span; h++) {
+      const conflict = events.some((e) => h < e.startHour + e.span && e.startHour < h + span);
+      if (!conflict) return h;
+    }
+    return null;
+  },
+
+  roomAvailability: () => {
+    const rooms = ['A-104', 'A-201', 'B-105', 'B-201', 'Lab-2', 'Lab-3', 'C-310', 'Auditorium'];
+    const schedule = get().schedule;
+    return rooms.map((room) => {
+      const events = schedule.filter((e) => e.day === 0 && e.room === room);
+      const currentHour = new Date().getHours() || 11;
+      const occupied = events.find((e) => currentHour >= e.startHour && currentHour < e.startHour + e.span);
+      if (occupied) {
+        const freeAt = occupied.startHour + occupied.span;
+        return { room, status: 'Occupied' as const, freeAt: `${freeAt}:00`, by: occupied.title, until: '' };
+      }
+      const next = events.find((e) => e.startHour > currentHour);
+      return { room, status: 'Free' as const, until: next ? `${next.startHour}:00` : 'End of day', freeAt: '', by: '' };
+    });
+  },
+
   // ─── Backend Integration ────────────────────────────────
   fetchDashboardData: async (token, role) => {
+    const headers = { Authorization: `Bearer ${token}`, 'x-mock-role': role };
+
+    // 1. Dashboard data
     try {
       const endpoint = role === 'STUDENT' ? '/api/dashboard/student' : '/api/dashboard/faculty';
-      const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'x-mock-role': role 
-        }
-      });
+      const res = await axios.get(`${API_BASE_URL}${endpoint}`, { headers });
       const data = res.data;
-      
-      // Map API notices to store notices
-      if (data.announcements) {
+      if (Array.isArray(data?.announcements)) {
         const mappedNotices = data.announcements.map((a: any) => ({
-          id: a.id,
-          by: a.author.name,
-          title: a.title,
-          body: a.body,
-          at: new Date(a.createdAt).getTime(),
-          audience: a.audience
+          id: a.id, by: a.author?.name || 'System', title: a.title, body: a.body,
+          at: new Date(a.createdAt).getTime(), audience: a.audience || 'All'
         }));
         set({ notices: mappedNotices });
       }
+    } catch (e) { console.warn('[CampusStore] Dashboard fetch failed', (e as Error).message); }
 
-      // Also fetch notifications
-      const notifRes = await axios.get(`${API_BASE_URL}/api/notifications`, {
-        headers: { Authorization: `Bearer ${token}`, 'x-mock-role': role }
-      });
-      if (notifRes.data) {
-        const mappedNotifs = notifRes.data.map((n: any) => ({
-          id: n.id,
-          title: n.type,
-          body: n.message,
-          at: new Date(n.createdAt).getTime(),
-          to: 'me',
-          kind: n.type === 'TICKET_RESOLVED' ? 'ticket' : 'approval',
-          read: n.isRead
-        }));
-        set({ notifications: mappedNotifs });
+    // 2. Notifications
+    try {
+      const notifRes = await axios.get(`${API_BASE_URL}/api/notifications`, { headers });
+      if (Array.isArray(notifRes.data)) {
+        set({ notifications: notifRes.data.map((n: any) => ({
+          id: n.id, title: n.type, body: n.message, at: new Date(n.createdAt).getTime(),
+          to: 'me', kind: n.type === 'TICKET_RESOLVED' ? 'ticket' as const : 'approval' as const, read: n.isRead
+        })) });
       }
+    } catch (e) { console.warn('[CampusStore] Notifications fetch failed', (e as Error).message); }
 
-      // Also fetch tickets
-      const ticketRes = await axios.get(`${API_BASE_URL}/api/tickets`, {
-        headers: { Authorization: `Bearer ${token}`, 'x-mock-role': role }
-      });
-      if (ticketRes.data) {
-        const mappedTickets = ticketRes.data.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          location: t.location || 'Campus',
-          category: 'IT',
-          priority: 'Medium',
-          status: t.status,
-          createdAt: new Date(t.createdAt).getTime(),
-          by: t.author?.name || 'User',
-          photos: t.imageUrl ? [t.imageUrl] : []
+    // 3. Tickets
+    try {
+      const ticketRes = await axios.get(`${API_BASE_URL}/api/tickets`, { headers });
+      if (Array.isArray(ticketRes.data)) {
+        const mapped = ticketRes.data.map((t: any) => ({
+          id: t.id, title: t.title, location: t.location || 'Campus', category: 'IT' as const,
+          priority: 'Medium' as const, status: t.status === 'OPEN' ? 'Open' as const : t.status === 'IN_PROGRESS' ? 'In Progress' as const : 'Resolved' as const,
+          createdAt: new Date(t.createdAt).getTime(), by: t.author?.name || 'User', photos: t.imageUrl ? [t.imageUrl] : []
         }));
-        set({ tickets: mappedTickets });
-        
-        // Push notification for Admin/HOD if there are open tickets
-        if (['ADMIN', 'HOD', 'PRINCIPAL'].includes(role)) {
-          const openCount = mappedTickets.filter((t: any) => t.status === 'OPEN' || t.status === 'Open').length;
-          if (openCount > 0) {
-             get().pushNotification({
-               title: 'Open Issues',
-               body: `You have ${openCount} open issue(s) requiring attention.`,
-               to: 'admin',
-               kind: 'ticket'
-             });
-          }
-        }
+        set({ tickets: mapped });
       }
+    } catch (e) { console.warn('[CampusStore] Tickets fetch failed', (e as Error).message); }
 
-      // Fetch approvals
-      const appRes = await axios.get(`${API_BASE_URL}/api/approvals`, {
-        headers: { Authorization: `Bearer ${token}`, 'x-mock-role': role }
-      });
-      if (appRes.data) {
-        const mappedApprovals = appRes.data.map((a: any) => {
-          let chain = defaultChain(a.type as ApprovalKind);
-          // adjust chain status based on a.status
-          if (a.status === 'PENDING_HOD') {
-            chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'done' } : i === 2 ? { ...c, status: 'current' } : c);
-          } else if (a.status === 'PENDING_PRINCIPAL') {
-             chain = chain.map((c, i) => i <= 2 ? { ...c, status: 'done' } : i === 3 ? { ...c, status: 'current' } : c);
-          } else if (a.status === 'COMPLETED') {
-             chain = chain.map(c => ({ ...c, status: 'done' }));
-          } else if (a.status === 'REJECTED') {
-             chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : { ...c, status: 'rejected' });
-          } else { // PENDING_PROFESSOR
-             chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' } : i === 1 ? { ...c, status: 'current' } : c);
-          }
+    // 4. Approvals
+    try {
+      const appRes = await axios.get(`${API_BASE_URL}/api/approvals`, { headers });
+      if (Array.isArray(appRes.data)) {
+        const mapped = appRes.data.map((a: any) => {
+          let chain = defaultChain((a.type || 'Leave') as ApprovalKind);
+          if (a.status === 'PENDING_HOD') chain = chain.map((c, i) => i <= 1 ? { ...c, status: 'done' as const } : i === 2 ? { ...c, status: 'current' as const } : c);
+          else if (a.status === 'PENDING_PRINCIPAL') chain = chain.map((c, i) => i <= 2 ? { ...c, status: 'done' as const } : i === 3 ? { ...c, status: 'current' as const } : c);
+          else if (a.status === 'COMPLETED') chain = chain.map(c => ({ ...c, status: 'done' as const }));
+          else if (a.status === 'REJECTED') chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' as const } : { ...c, status: 'rejected' as const });
+          else chain = chain.map((c, i) => i === 0 ? { ...c, status: 'done' as const } : i === 1 ? { ...c, status: 'current' as const } : c);
           let frontendStatus: Approval['status'] = 'Pending';
           if (a.status === 'COMPLETED') frontendStatus = 'Approved';
           if (a.status === 'REJECTED') frontendStatus = 'Rejected';
-          if (a.status.startsWith('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
-          
-          return {
-            id: a.id,
-            title: `${a.type} Request`,
-            kind: a.type as ApprovalKind,
-            by: a.requester?.name || 'Student',
-            createdAt: new Date(a.createdAt).getTime(),
-            status: frontendStatus,
-            chain: chain,
-            details: { details: a.content }
-          };
+          if (a.status?.startsWith?.('PENDING_') && a.status !== 'PENDING_PROFESSOR') frontendStatus = 'In Review';
+          return { id: a.id, title: `${a.type} Request`, kind: (a.type || 'Leave') as ApprovalKind,
+            by: a.requester?.name || 'Student', createdAt: new Date(a.createdAt).getTime(),
+            status: frontendStatus, chain, details: a.content ? { details: a.content } : undefined };
         });
-        set({ approvals: mappedApprovals });
-        
-        // Push notification for faculty if there are pending requests
-        if (role !== 'STUDENT') {
-          const pendingCount = mappedApprovals.filter((a: any) => a.status === 'Pending').length;
-          if (pendingCount > 0) {
-             get().pushNotification({
-               title: 'Pending Approvals',
-               body: `You have ${pendingCount} pending request(s) to review.`,
-               to: 'me',
-               kind: 'approval'
-             });
-          }
-        }
+        set({ approvals: mapped });
       }
-    } catch (err) {
-      console.error('[CampusStore] Failed to fetch dashboard', err);
-    }
+    } catch (e) { console.warn('[CampusStore] Approvals fetch failed', (e as Error).message); }
   },
 
   initRealTimeSync: (role, userId) => {
