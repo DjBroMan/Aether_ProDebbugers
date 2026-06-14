@@ -34,3 +34,4 @@ A DevOps-focused modular foundation. The team built the platform to be "Plugin-R
 
 ### Financial Settlement Gateway
 A secure clearinghouse integration that allows students to clear library fines, canteen bills, or lab dues via instant UPI or card payments.
+Testing push from Sampada
